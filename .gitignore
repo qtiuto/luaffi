@@ -1,0 +1,5 @@
+/build
+.externalNativeBuild
+test/
+*.iml
+*.cmd
