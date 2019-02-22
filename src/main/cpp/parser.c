@@ -448,10 +448,13 @@ static void calculate_member_position(lua_State* L, struct parser* P, struct cty
         ct->base_size += bit_offset / CHAR_BIT;
         bit_offset = bit_offset % CHAR_BIT;
 
+//arm ignored it
+#if !defined(ARCH_ARM64) &&!defined(ARCH_ARM)
         /* unnamed bitfields don't update the struct alignment */
         if (!mt->has_member_name) {
             mt->ct.align_mask = 0;
         }
+#endif
 #else
 #error
 #endif

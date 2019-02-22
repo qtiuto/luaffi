@@ -2490,6 +2490,16 @@ static int cdata_mod(lua_State* L)
 static int cdata_pow(lua_State* L)
 { NUMBER_ONLY_BINOP(TM_POW, POW, POWC); }
 
+#define POINTER_FIX_CHECK()\
+     if(lt.type==FUNCTION_PTR_TYPE)\
+         lp=*(uintptr_t**)lp;\
+     if(rt.type==FUNCTION_PTR_TYPE)\
+         rp=*(uintptr_t**)rp;\
+     if((is_void_ptr(&rt)||rt.is_null)&&(lt.pointers||lt.type==FUNCTION_PTR_TYPE)||\
+     (is_void_ptr(&lt)||lt.is_null)&&(rt.pointers||rt.type==FUNCTION_PTR_TYPE)||\
+     is_same_type(L, 3, 4, &lt, &rt))
+
+
 #define COMPARE_BINOP(OPKEY, OP, OPC)                                       \
     struct ctype lt, rt;                                                    \
     void *lp, *rp;                                                          \
@@ -2505,16 +2515,15 @@ static int cdata_pow(lua_State* L)
         return ret;                                                         \
     }                                                                       \
                                                                             \
-    if (lt.pointers || rt.pointers) {                                       \
-        if ((is_void_ptr(&lt)&&rt.pointers)                                 \
-            ||(is_void_ptr(&rt)&&lt.pointers)                               \
-            || is_same_type(L, 3, 4, &lt, &rt)) {                           \
+    if (lt.pointers || lt.type==FUNCTION_PTR_TYPE||                         \
+        rt.pointers || rt.type==FUNCTION_PTR_TYPE) {                        \
+        POINTER_FIX_CHECK() {                                               \
             res = OP((char*)lp, (char*)rp);                                 \
         } else {                                                            \
             goto err;                                                       \
         }                                                                   \
                                                                             \
-    } else {                                                                \
+    }else {                                                                 \
         if (IS_COMPLEX(lt.type) || IS_COMPLEX(rt.type)) {                   \
             complex_double left = check_complex(L, 1, lp, &lt);             \
             complex_double right = check_complex(L, 2, rp, &rt);            \
@@ -2527,13 +2536,7 @@ static int cdata_pow(lua_State* L)
                                                                             \
         int64_t left = check_intptr(L, 1, lp, &lt);                         \
         int64_t right = check_intptr(L, 2, rp, &rt);                        \
-        if (lt.is_null && rt.type == FUNCTION_PTR_TYPE) {                   \
-            res = OP((uint64_t) left, (uint64_t) right);                    \
-                                                                            \
-        } else if (rt.is_null && lt.type == FUNCTION_PTR_TYPE) {            \
-            res = OP((uint64_t) left, (uint64_t) right);                    \
-                                                                            \
-        } else if (lt.is_unsigned && rt.is_unsigned) {                      \
+        if (lt.is_unsigned && rt.is_unsigned) {                      \
             res = OP((uint64_t) left, (uint64_t) right);                    \
                                                                             \
         } else if (lt.is_unsigned) {                                        \
@@ -2722,7 +2725,6 @@ static int cdata_tostring(lua_State* L)
         }
 
         case FUNCTION_PTR_TYPE:
-            p = *(void **) p;
             push_type_name(L, -1, &ct);
             lua_pushfstring(L, "cdata<%s>: %p", lua_tostring(L, -1), *(void **) p);
             return 1;

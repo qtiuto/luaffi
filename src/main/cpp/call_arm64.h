@@ -18,7 +18,7 @@
 #error "Version mismatch between DynASM and included encoding engine"
 #endif
 
-static const unsigned int build_actionlist[765] = {
+static const unsigned int build_actionlist[816] = {
 0xf84003e1,
 0x000f0000,
 0x00000000,
@@ -322,6 +322,17 @@ static const unsigned int build_actionlist[765] = {
 0xaa1503e0,
 0x94000000,
 0x0003000d,
+0x00000000,
+0x6b1f001f,
+0x1a9f07e0,
+0x00000000,
+0x53001c00,
+0x00000000,
+0x13001c00,
+0x00000000,
+0x53003c00,
+0x00000000,
+0x13003c00,
 0x00000000,
 0x12800001,
 0x00000000,
@@ -678,7 +689,7 @@ static const unsigned int build_actionlist[765] = {
 0x9100c3ff,
 0xd65f03c0,
 0x00000000,
-0xaa0003e1,
+0x2a0003e1,
 0xaa1503e0,
 0x94000000,
 0x00030004,
@@ -690,7 +701,47 @@ static const unsigned int build_actionlist[765] = {
 0x9100c3ff,
 0xd65f03c0,
 0x00000000,
-0xaa0003e1,
+0x2a0003e1,
+0x00000000,
+0x53001c21,
+0xaa1503e0,
+0x94000000,
+0x0003001b,
+0x00000000,
+0x13001c21,
+0xaa1503e0,
+0x94000000,
+0x00030005,
+0x00000000,
+0x52800020,
+0x910003bf,
+0xf94003f5,
+0xa94153f3,
+0xa9427bfd,
+0x9100c3ff,
+0xd65f03c0,
+0x00000000,
+0x2a0003e1,
+0x00000000,
+0x53003c21,
+0xaa1503e0,
+0x94000000,
+0x0003001b,
+0x00000000,
+0x13003c21,
+0xaa1503e0,
+0x94000000,
+0x00030005,
+0x00000000,
+0x52800020,
+0x910003bf,
+0xf94003f5,
+0xa94153f3,
+0xa9427bfd,
+0x9100c3ff,
+0xd65f03c0,
+0x00000000,
+0x2a0003e1,
 0x00000000,
 0xaa1503e0,
 0x94000000,
@@ -758,8 +809,8 @@ static const unsigned int build_actionlist[765] = {
 0x9100c3ff,
 0xd65f03c0,
 0x00000000,
-0x9e660014,
-0x9e660033,
+0x9e660013,
+0x9e660034,
 0x52800002,
 0x000a0205,
 0xf2a00002,
@@ -1180,53 +1231,72 @@ cfunction compile_callback(lua_State* L, int fidx, int ct_usr, const struct ctyp
             } else {
                 dasm_put(Dst, 300);
             }
+			switch(mt->type){
+				case BOOL_TYPE:
+					dasm_put(Dst, 304);
+					break;
+				case INT8_TYPE:
+					if (mt->is_unsigned) {
+						dasm_put(Dst, 307);
+					} else {
+						dasm_put(Dst, 309);
+					}
+					break;
+				case INT16_TYPE:
+					if (mt->is_unsigned) {
+						dasm_put(Dst, 311);
+					} else {
+						dasm_put(Dst, 313);
+					}
+					break;
+			}
             goto single;
 
         case INT64_TYPE:
-            dasm_put(Dst, 304);
+            dasm_put(Dst, 315);
             if (mt->is_unsigned) {
-                dasm_put(Dst, 306);
+                dasm_put(Dst, 317);
             } else {
-                dasm_put(Dst, 310);
+                dasm_put(Dst, 321);
             }
 			
 			goto single;
 
         case INTPTR_TYPE:
-            dasm_put(Dst, 314);
+            dasm_put(Dst, 325);
             goto single;
 
         case FLOAT_TYPE:
-            dasm_put(Dst, 319);
+            dasm_put(Dst, 330);
 			
-            dasm_put(Dst, 324);
+            dasm_put(Dst, 335);
             lua_pop(L, 1);
 			break;
         case DOUBLE_TYPE:
-            dasm_put(Dst, 331);
+            dasm_put(Dst, 342);
 			
-            dasm_put(Dst, 336);
+            dasm_put(Dst, 347);
 			
             lua_pop(L, 1);
 			break;
 			
 		case COMPLEX_DOUBLE_TYPE:
 
-			dasm_put(Dst, 343);
+			dasm_put(Dst, 354);
 		    
 			goto complex_ret;
 		case COMPLEX_FLOAT_TYPE:
-			dasm_put(Dst, 348);
+			dasm_put(Dst, 359);
 			
 		complex_ret:	
-			dasm_put(Dst, 353);
+			dasm_put(Dst, 364);
 
             lua_pop(L, 1);			
 			break;
         single:
             lua_pop(L, 1);
 		single_no_pop:	
-            dasm_put(Dst, 362);
+            dasm_put(Dst, 373);
             break;
 
         
@@ -1235,7 +1305,7 @@ cfunction compile_callback(lua_State* L, int fidx, int ct_usr, const struct ctyp
         }
     }
 	
-	dasm_put(Dst, 369,  (0x20 + ((regs.floats!=0)||(regs.ints!=0)) * 0x80));
+	dasm_put(Dst, 380,  (0x20 + ((regs.floats!=0)||(regs.ints!=0)) * 0x80));
 	
     lua_pop(L, 1); /* upval table - already in registry */
     assert(lua_gettop(L) == top);
@@ -1260,30 +1330,30 @@ cfunction compile_callback(lua_State* L, int fidx, int ct_usr, const struct ctyp
 static ALWAYS_INLINE void storeFloat(struct jit* Dst,reg_info* regs,int isFloat,int isComplex){
 	if(regs->floats<8){
 		if(!isComplex||regs->floats==7){
-			dasm_put(Dst, 375, (regs->floats++<<3));
+			dasm_put(Dst, 386, (regs->floats++<<3));
 			if(isComplex){
 				if(isFloat){
-					dasm_put(Dst, 378);
+					dasm_put(Dst, 389);
 				}else{
-					dasm_put(Dst, 380);
+					dasm_put(Dst, 391);
 				}
 			}
 		}else{
-			dasm_put(Dst, 382, (regs->floats<<3));
+			dasm_put(Dst, 393, (regs->floats<<3));
 			regs->floats+=2;
 		}
 	}else if(isComplex){
 		//complex float is packed as one double on stack
 		if(isFloat){
-			dasm_put(Dst, 385);
+			dasm_put(Dst, 396);
 		}else{
-			dasm_put(Dst, 387);
+			dasm_put(Dst, 398);
 		}
 	}else {
 		if(isFloat){
-			dasm_put(Dst, 389);
+			dasm_put(Dst, 400);
 		}else {
-			dasm_put(Dst, 391);
+			dasm_put(Dst, 402);
 		}
 	}
 }
@@ -1308,15 +1378,15 @@ void compile_function(lua_State* L, cfunction func, int ct_usr, const struct cty
 
     reg_info regs={0,0};
 	
-	dasm_put(Dst, 393);
+	dasm_put(Dst, 404);
 	
     /* reserve enough stack space for all of the arguments (16 bytes per
      * argument for complex double and maintains alignment). */
 	 
     if (ct->has_var_arg) {
-        dasm_put(Dst, 400, nargs, (unsigned short)("too few arguments"), (((unsigned int)("too few arguments"))>>16), (unsigned short)((unsigned long)("too few arguments")>>32), (unsigned short)((unsigned long)("too few arguments")>>48));
+        dasm_put(Dst, 411, nargs, (unsigned short)("too few arguments"), (((unsigned int)("too few arguments"))>>16), (unsigned short)((unsigned long)("too few arguments")>>32), (unsigned short)((unsigned long)("too few arguments")>>48));
     }else if(nargs>0){
-		dasm_put(Dst, 423, (nargs<<4)+0x80);
+		dasm_put(Dst, 434, (nargs<<4)+0x80);
     }
 
     for (i = 1,regs.ints=0,regs.floats=0; i <= nargs; i++) {
@@ -1328,95 +1398,96 @@ void compile_function(lua_State* L, cfunction func, int ct_usr, const struct cty
             num_upvals += 2;
 
 			
-			dasm_put(Dst, 427, (unsigned short)(mt), (((unsigned int)(mt))>>16), (unsigned short)((unsigned long)(mt)>>32), (unsigned short)((unsigned long)(mt)>>48), (unsigned short)(lua_upvalueindex(num_upvals)), (((unsigned int)(lua_upvalueindex(num_upvals)))>>16), i);
+			dasm_put(Dst, 438, (unsigned short)(mt), (((unsigned int)(mt))>>16), (unsigned short)((unsigned long)(mt)>>32), (unsigned short)((unsigned long)(mt)>>48), (unsigned short)(lua_upvalueindex(num_upvals)), (((unsigned int)(lua_upvalueindex(num_upvals)))>>16), i);
 			
             if (mt->pointers || mt->is_reference) {
-                dasm_put(Dst, 442);
+                dasm_put(Dst, 453);
             } else if (mt->type == FUNCTION_PTR_TYPE) {
-                dasm_put(Dst, 446);
+                dasm_put(Dst, 457);
             } else if (mt->type == ENUM_TYPE) {
-                dasm_put(Dst, 450);
+                dasm_put(Dst, 461);
             }
 			goto longstore;
 
         } else {
             lua_pop(L, 1);
-            dasm_put(Dst, 454, i);
+            dasm_put(Dst, 465, i);
 
             switch (mt->type) {
             case BOOL_TYPE:
-                dasm_put(Dst, 457);
+                dasm_put(Dst, 468);
                 goto intstore;
+				
             case INT8_TYPE:
-                dasm_put(Dst, 463);
+                dasm_put(Dst, 474);
                 if (mt->is_unsigned) {
-                    dasm_put(Dst, 467);
+                    dasm_put(Dst, 478);
                 } else {
-                    dasm_put(Dst, 469);
+                    dasm_put(Dst, 480);
                 }
 				goto intstore;
 
             case INT16_TYPE:
-                dasm_put(Dst, 471);
+                dasm_put(Dst, 482);
                 if (mt->is_unsigned) {
-                    dasm_put(Dst, 475);
+                    dasm_put(Dst, 486);
                 } else {
-                    dasm_put(Dst, 477);
+                    dasm_put(Dst, 488);
                 }
 				goto intstore;
 
             case INT32_TYPE:
                 if (mt->is_unsigned) {
-                    dasm_put(Dst, 479);
+                    dasm_put(Dst, 490);
                 } else {
-                    dasm_put(Dst, 483);
+                    dasm_put(Dst, 494);
                 }
  				goto intstore;
 
             case INT64_TYPE:
                 if (mt->is_unsigned) {
-                    dasm_put(Dst, 487);
+                    dasm_put(Dst, 498);
                 } else {
-                    dasm_put(Dst, 491);
+                    dasm_put(Dst, 502);
                 }
               	goto longstore;
 				
             case INTPTR_TYPE:
-                dasm_put(Dst, 495);
+                dasm_put(Dst, 506);
                 
                 goto longstore;
 
             case DOUBLE_TYPE:
-                dasm_put(Dst, 499);
+                dasm_put(Dst, 510);
                 storeFloat(Dst,&regs,0,0);
                 break;
 
             case FLOAT_TYPE:
-                dasm_put(Dst, 503);
+                dasm_put(Dst, 514);
                 storeFloat(Dst,&regs,1,0);
                 break;
 			case COMPLEX_DOUBLE_TYPE:
-                dasm_put(Dst, 507);
+                dasm_put(Dst, 518);
 				storeFloat(Dst,&regs,0,1);
                 break;
 
             case COMPLEX_FLOAT_TYPE:
-                dasm_put(Dst, 511);
+                dasm_put(Dst, 522);
 				storeFloat(Dst,&regs,1,1);
                 break;
 				
 			intstore:
 				if(regs.ints<8)
-					dasm_put(Dst, 515, 0x40+(regs.ints++<<3));
+					dasm_put(Dst, 526, 0x40+(regs.ints++<<3));
 				else
-					dasm_put(Dst, 518);
+					dasm_put(Dst, 529);
 				
                 break;
 			longstore:
 				if(regs.ints<8)
-					dasm_put(Dst, 520, 0x40+(regs.ints++<<3));
+					dasm_put(Dst, 531, 0x40+(regs.ints++<<3));
 				else
-					dasm_put(Dst, 523);
+					dasm_put(Dst, 534);
                 break;
 				
             default:
@@ -1427,12 +1498,12 @@ void compile_function(lua_State* L, cfunction func, int ct_usr, const struct cty
 
     if (ct->has_var_arg) {
 		if(regs.floats<8){
-			dasm_put(Dst, 525, regs.floats<<3, (8-regs.floats), nargs+1);
+			dasm_put(Dst, 536, regs.floats<<3, (8-regs.floats), nargs+1);
 		}
 		if(regs.ints<8){
-			dasm_put(Dst, 536, 0x40+(regs.ints<<3), (8-regs.ints), nargs+1);
+			dasm_put(Dst, 547, 0x40+(regs.ints<<3), (8-regs.ints), nargs+1);
 		}
-		dasm_put(Dst, 547, (nargs>8?nargs:8), (8-regs.floats), (8-regs.ints), nargs+1);
+		dasm_put(Dst, 558, (nargs>8?nargs:8), (8-regs.floats), (8-regs.ints), nargs+1);
 		regs.floats=regs.ints=8;
     }
 
@@ -1440,36 +1511,36 @@ void compile_function(lua_State* L, cfunction func, int ct_usr, const struct cty
 	switch(regs.ints){
 		case 8:
 		case 7:
-            dasm_put(Dst, 564);
+            dasm_put(Dst, 575);
 		case 6:
 		case 5:
-            dasm_put(Dst, 566);
+            dasm_put(Dst, 577);
 		case 4:
 		case 3:
-            dasm_put(Dst, 568);
+            dasm_put(Dst, 579);
 		case 2:
 		case 1:
-			dasm_put(Dst, 570);
+			dasm_put(Dst, 581);
     }
 	
 	switch(regs.floats){
 		case 8:
 		case 7:
-            dasm_put(Dst, 572);
+            dasm_put(Dst, 583);
 		case 6:
 		case 5:
-            dasm_put(Dst, 574);
+            dasm_put(Dst, 585);
 		case 4:
 		case 3:
-            dasm_put(Dst, 576);
+            dasm_put(Dst, 587);
 		case 2:
 		case 1:
-			dasm_put(Dst, 578);
+			dasm_put(Dst, 589);
     }
 	if(regs.ints==8|| regs.floats==8){// fix stack case registers is full
-		dasm_put(Dst, 580);
+		dasm_put(Dst, 591);
 	}
-    dasm_put(Dst, 582, (unsigned short)(func), (((unsigned int)(func))>>16), (unsigned short)((unsigned long)(func)>>32), (unsigned short)((unsigned long)(func)>>48));
+    dasm_put(Dst, 593, (unsigned short)(func), (((unsigned int)(func))>>16), (unsigned short)((unsigned long)(func)>>32), (unsigned short)((unsigned long)(func)>>48));
 
 
     lua_rawgeti(L, ct_usr, 0);
@@ -1478,64 +1549,82 @@ void compile_function(lua_State* L, cfunction func, int ct_usr, const struct cty
     if (mt->pointers || mt->is_reference || mt->type==FUNCTION_PTR_TYPE) {
         lua_getuservalue(L, -1);
         num_upvals += 2;
-        dasm_put(Dst, 592, (unsigned short)(mt), (((unsigned int)(mt))>>16), (unsigned short)((unsigned long)(mt)>>32), (unsigned short)((unsigned long)(mt)>>48), (unsigned short)(lua_upvalueindex(num_upvals)), (((unsigned int)(lua_upvalueindex(num_upvals)))>>16));
+        dasm_put(Dst, 603, (unsigned short)(mt), (((unsigned int)(mt))>>16), (unsigned short)((unsigned long)(mt)>>32), (unsigned short)((unsigned long)(mt)>>48), (unsigned short)(lua_upvalueindex(num_upvals)), (((unsigned int)(lua_upvalueindex(num_upvals)))>>16));
 
     } else {
         switch (mt->type) {
         case INT64_TYPE:
 		#if LUA_VERSION_NUM>=503
 			 lua_pop(L, 1);
-            dasm_put(Dst, 617);
+            dasm_put(Dst, 628);
             break;
 		#endif
 
         case INTPTR_TYPE:
             num_upvals++;
-            dasm_put(Dst, 629, (unsigned short)(mt), (((unsigned int)(mt))>>16), (unsigned short)((unsigned long)(mt)>>32), (unsigned short)((unsigned long)(mt)>>48));
+            dasm_put(Dst, 640, (unsigned short)(mt), (((unsigned int)(mt))>>16), (unsigned short)((unsigned long)(mt)>>32), (unsigned short)((unsigned long)(mt)>>48));
 			break;
         case VOID_TYPE:
             lua_pop(L, 1);
-            dasm_put(Dst, 651);
+            dasm_put(Dst, 662);
             break;
 
         case BOOL_TYPE:
             lua_pop(L, 1);
-            dasm_put(Dst, 659);
+            dasm_put(Dst, 670);
             break;
 
         case INT8_TYPE:
+			lua_pop(L, 1);
+            dasm_put(Dst, 682);
+            if (mt->is_unsigned) {
+                dasm_put(Dst, 684);
+            } else {
+                dasm_put(Dst, 689);
+            }
+            dasm_put(Dst, 694);
+			break;
         case INT16_TYPE:
+			lua_pop(L, 1);
+            dasm_put(Dst, 702);
+            if (mt->is_unsigned) {
+                dasm_put(Dst, 704);
+            } else {
+                dasm_put(Dst, 709);
+            }
+            dasm_put(Dst, 714);
+			break;
         case INT32_TYPE:
         case ENUM_TYPE:
             lua_pop(L, 1);
-            dasm_put(Dst, 671);
+            dasm_put(Dst, 722);
             if (mt->is_unsigned) {
-                dasm_put(Dst, 673);
+                dasm_put(Dst, 724);
             } else {
-                dasm_put(Dst, 677);
+                dasm_put(Dst, 728);
             }
-            dasm_put(Dst, 681);
+            dasm_put(Dst, 732);
             break;
 
         case FLOAT_TYPE:
             lua_pop(L, 1);
-            dasm_put(Dst, 689);
+            dasm_put(Dst, 740);
             break;
 
         case DOUBLE_TYPE:
             lua_pop(L, 1);
-            dasm_put(Dst, 700);
+            dasm_put(Dst, 751);
             break;
 		case COMPLEX_FLOAT_TYPE:
             lua_getuservalue(L, -1);
             num_upvals+=2;
-            dasm_put(Dst, 711, (unsigned short)(mt), (((unsigned int)(mt))>>16), (unsigned short)((unsigned long)(mt)>>32), (unsigned short)((unsigned long)(mt)>>48), (unsigned short)(lua_upvalueindex(num_upvals)), (((unsigned int)(lua_upvalueindex(num_upvals)))>>16));
+            dasm_put(Dst, 762, (unsigned short)(mt), (((unsigned int)(mt))>>16), (unsigned short)((unsigned long)(mt)>>32), (unsigned short)((unsigned long)(mt)>>48), (unsigned short)(lua_upvalueindex(num_upvals)), (((unsigned int)(lua_upvalueindex(num_upvals)))>>16));
             break;
 
         case COMPLEX_DOUBLE_TYPE:
             lua_getuservalue(L, -1);
             num_upvals+=2;
-            dasm_put(Dst, 739, (unsigned short)(mt), (((unsigned int)(mt))>>16), (unsigned short)((unsigned long)(mt)>>32), (unsigned short)((unsigned long)(mt)>>48), (unsigned short)(lua_upvalueindex(num_upvals)), (((unsigned int)(lua_upvalueindex(num_upvals)))>>16));
+            dasm_put(Dst, 790, (unsigned short)(mt), (((unsigned int)(mt))>>16), (unsigned short)((unsigned long)(mt)>>32), (unsigned short)((unsigned long)(mt)>>48), (unsigned short)(lua_upvalueindex(num_upvals)), (((unsigned int)(lua_upvalueindex(num_upvals)))>>16));
             break;
         default:
             luaL_error(L, "NYI: call return type");

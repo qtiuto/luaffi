@@ -690,6 +690,26 @@ cfunction compile_callback(lua_State* L, int fidx, int ct_usr, const struct ctyp
             } else {
                 | lcall extern check_int32
             }
+			switch(mt->type){
+				case BOOL_TYPE:
+					| cmp r0, #0
+					| movne r0,#1
+					break;
+				case INT8_TYPE:
+					if (mt->is_unsigned) {
+						| uxtb r0, r0
+					} else {
+						| sxtb r0 ,r0
+					}
+					break;
+				case INT16_TYPE:
+					if (mt->is_unsigned) {
+						| uxth r0, r0
+					} else {
+						| sxth r0 ,r0
+					}
+					break;
+			}
             goto single;
 
         case INT64_TYPE:
@@ -747,7 +767,7 @@ cfunction compile_callback(lua_State* L, int fidx, int ct_usr, const struct ctyp
 			|.else
 			| mvn r2, #0 // -1 
 			| mov r1,L_ARG
-			| ldr r0,[sp, #st.int_off]//saved r0,the return address
+			| ldr r0,[sp, #st.extra]//saved r0,the return address
 			| bl extern check_complex_double
 		    | mvn r1, #2 // -3
             | lcall extern lua_settop
@@ -765,7 +785,7 @@ cfunction compile_callback(lua_State* L, int fidx, int ct_usr, const struct ctyp
 			|.else
 			| mvn r2, #0 // -1
 			| mov r1,L_ARG
-			| ldr r0,[sp, #st.int_off]//saved r0,the return address
+			| ldr r0,[sp, #st.extra]//saved r0,the return address
 			| bl extern check_complex_float
 		    | mvn r1, #2 // -3
             | lcall extern lua_settop
@@ -953,6 +973,7 @@ void compile_function(lua_State* L, cfunction func, int ct_usr, const struct cty
 		| mov r1, #0 
 		| lcall extern push_cdata	
 		| sub sp,sp,#8 //leave room for return arg,8 for alignment if needed
+		| sub DATA, DATA, #8
 		| str r0,[sp] // address for complex return
 	}
 	lua_pop(L,1);
@@ -1136,7 +1157,7 @@ void compile_function(lua_State* L, cfunction func, int ct_usr, const struct cty
 	|.endif
 	
 	//pop registers from stack,align 8 for some compiler
-	
+	assert(regs.ints<=4);
 	switch(regs.ints){
 	case 4:
 	case 3:
@@ -1145,9 +1166,8 @@ void compile_function(lua_State* L, cfunction func, int ct_usr, const struct cty
 	case 2:
 	case 1:
 		| pop {r0,r1}
-		break;
 	default:
-		abort();
+		break;
 	}
 	
 	| load32 r12,func
@@ -1231,12 +1251,29 @@ void compile_function(lua_State* L, cfunction func, int ct_usr, const struct cty
         case INT32_TYPE:
         case ENUM_TYPE:
             lua_pop(L, 1);
+			switch(mt->type){
+				case INT8_TYPE:
+					if (mt->is_unsigned) {
+						| uxtb r0, r0
+					} else {
+						| sxtb r0 ,r0
+					}
+					break;
+				case INT16_TYPE:
+					if (mt->is_unsigned) {
+						| uxth r0, r0
+					} else {
+						| sxth r0 ,r0
+					}
+					break;
+			}
             | mov r1, r0
             if (mt->is_unsigned) {
                 | lcall extern push_uint
             } else {
                 | lcall extern push_int
             }
+			
             | mov r0, #1
             | return
             break;
