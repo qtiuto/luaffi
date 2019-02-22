@@ -243,6 +243,7 @@ void check_ctype(lua_State* L, int idx, struct ctype* ct)
 err:
     luaL_error(L, "expected cdata, ctype or string for arg #%d", idx);
 }
+
 static ALWAYS_INLINE int is_cdata(lua_State* L, int idx){
     if (!lua_isuserdata(L, idx) || !lua_getmetatable(L, idx)) {
         lua_pushnil(L);
@@ -259,7 +260,7 @@ static ALWAYS_INLINE int is_cdata(lua_State* L, int idx){
 }
 
 /**
- * get_ctype return the type on the for the c_data on idx
+ * get_ctype return the type for the c_data on idx
  * @param L
  * @param idx
  * @return
