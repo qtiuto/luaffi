@@ -21,15 +21,13 @@ local function loadlib(lib)
     error("Unable to load", lib)
 end
 
-if _VERSION == 'Lua 5.1' then
-    --dlls.__cdecl = loadlib('ffi/libtest')
-else
-    --dlls.__cdecl = ffi.load(package.searchpath('ffi.libtest', package.cpath))
+if ffi.debug then
+    dlls.__cdecl = ffi.load('libffitest')
 end
 
 if ffi.arch == 'x86' and ffi.os == 'Windows' then
-    dlls.__stdcall = ffi.load('test_stdcall')
-    dlls.__fastcall = ffi.load('test_fastcall')
+    --dlls.__stdcall = ffi.load('ffitest_stdcall')
+    --dlls.__fastcall = ffi.load('ffitest_fastcall')
 end
 
 local function check(a, b, msg)
