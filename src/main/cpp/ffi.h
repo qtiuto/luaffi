@@ -429,10 +429,10 @@ typedef void (*cfunction)(void);
 typedef double complex complex_double;
 typedef float complex complex_float;
 static ALWAYS_INLINE complex_double mk_complex_double(double real, double imag) {
-    return (complex_double){real , imag };
+      return real + imag * 1i;
 }
 static ALWAYS_INLINE complex_float mk_complex_float(double real, double imag) {
-    return (complex_float){(float)real , (float)imag };
+      return real + imag * 1i;
 }
 
 extern float cimagf(complex_float);
@@ -561,6 +561,8 @@ void unpack_varargs_reg(lua_State* L, int first, int last, char* to);
 void unpack_varargs_stack_skip(lua_State* L, int first, int last, int ints_to_skip, int floats_to_skip, char* to);
 void unpack_varargs_float(lua_State* L, int first, int last, int max, char* to);
 void unpack_varargs_int(lua_State* L, int first, int last, int max, char* to);
+
+int unpack_varargs_bound(lua_State* L, int first, char* to,char* end);
 
 
 

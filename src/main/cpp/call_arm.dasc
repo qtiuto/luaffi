@@ -35,6 +35,9 @@
 #define ARM_HF 1
 #else
 #define ARM_HF 0
+#endif
+#if ARM_HF&&!CK_ALGIN
+#error "Unsupported unaligned stack for hard floating point"
 #endif	
 static void compile_extern_jump(struct jit* jit, lua_State* L, cfunction func, uint8_t* code)
 {
@@ -131,7 +134,7 @@ static void save_float_reg(struct jit* Dst,int reg,int size,stack_info* st){
 	if(reg==-1) return;
 	|.if ARM_HF
 	switch(size){
-	case 1:
+	case 4:
 		switch(reg){
 			case 0:
 				| vstr s0,[sp,#st->float_size]
@@ -183,7 +186,7 @@ static void save_float_reg(struct jit* Dst,int reg,int size,stack_info* st){
 				break;
 		}
 		break;
-	case 2:
+	case 8:
 		switch(reg>>1){
 			case 0:
 				| vstr d0,[sp,#st->float_size]
@@ -327,7 +330,7 @@ static void load_stack(struct jit* Dst,stack_info* st,int size,int align){
 
 static void load_int(struct jit* Dst,stack_info* st,int size,int align){
 	FIX_ALIGN(st->int_off,align);
-	if(st->int_off<MAX_REGS*4){
+	if(st->int_off<0x40*ARM_HF+MAX_REGS*4){
 		load_reg(Dst,st->int_off+st->extra,size);
 		st->int_off+=size;
 	}else{
@@ -382,13 +385,13 @@ static void push_regs(lua_State* L,struct jit* Dst,int ct_usr,int nargs,stack_in
 		}else{
 			switch(mt->type){
 				case COMPLEX_DOUBLE_TYPE:
-					save_float_reg(Dst,add_float_reg(&regs,2),2,st);
+					save_float_reg(Dst,add_float_reg(&regs,2),8,st);
 				case DOUBLE_TYPE:
 				case COMPLEX_FLOAT_TYPE:// Though complex alignment is 4, but vfp requires a sequence of regsiters
-					save_float_reg(Dst,add_float_reg(&regs,2),2,st);
+					save_float_reg(Dst,add_float_reg(&regs,2),8,st);
 					break;
 				case FLOAT_TYPE:
-					save_float_reg(Dst,add_float_reg(&regs,1),1,st);
+					save_float_reg(Dst,add_float_reg(&regs,1),4,st);
 					break;
 				case INT64_TYPE:
 					add_int64_reg(&regs);
@@ -397,6 +400,7 @@ static void push_regs(lua_State* L,struct jit* Dst,int ct_usr,int nargs,stack_in
 					add_int_reg(&regs);//no need to check type support here
 			}
 		}
+		lua_pop(L,1);
 	}
 	st->float_off+=st->int_off;
 	st->int_off+=0x40;
@@ -736,21 +740,23 @@ cfunction compile_callback(lua_State* L, int fidx, int ct_usr, const struct ctyp
 			| lcall extern lua_settop
 			| vmov s0, DATA
 			|.endif
+			lua_pop(L, 1);
 			#else
             goto single;
 			#endif
-
+			break;
         case DOUBLE_TYPE:
             | mvn r1, #0 // -1
             | lcall extern check_double
 			#if ARM_HF
 			|.if ARM_HF
-			| vmov L_ARG, DATA, d0
 			| mov r0, L_ARG
+			| vmov L_ARG, DATA, d0
             | mvn r1, #2 // -3
 			| bl extern lua_settop
 			| vmov d0, L_ARG, DATA
 			|.endif
+			lua_pop(L, 1);
             #else
 			goto dual;
 			#endif
@@ -881,29 +887,40 @@ static ALWAYS_INLINE void save_int(struct jit* Dst,reg_info* regs){
 static void save_float(struct jit* Dst,reg_info* regs,int size,int align){
 #if ARM_HF
 |.if ARM_HF
-	if(regs->float_sealed){
+	if(!regs->float_sealed){
 		int reg=add_float_reg(regs,size);
 		if(reg<0) goto SAVE_STACK;
 		switch(size){
 		case 4:
-			|vstr d1,[sp,#(regs->regs<<2)+8]
+			|vstr d1,[sp,#(reg<<2)+8]
 		case 2:
-			|vstr d0,[sp,#(regs->regs<<2)]
+			|vstr d0,[sp,#(reg<<2)]
 			break;
 		case 1:
-			|vstr s0,[sp,#(regs->regs<<2)]
+			|vstr s0,[sp,#(reg<<2)]
 			break;
 		}
+		return;
 	}
 |.endif
 	SAVE_STACK:
 	if(size==1){
-		save_int_stack_align(Dst,regs);
+		| vstmia DATA!, {s0-s0}
+		regs->exs++;
 	}else if(size==2){
-		save_int64_stack_align(Dst,regs,align);
+		if(align&&!ALIGNED(regs->exs,2)){
+			regs->exs++;
+			| add DATA, DATA, #4
+		}
+		| vstmia DATA!, {d0-d0}
+		regs->exs+=2;
 	}else if(size==4){
-		save_int64_stack_align(Dst,regs,1);
-		save_int64_stack_align(Dst,regs,1);
+		if(!ALIGNED(regs->exs,2)){
+			regs->exs++;
+			| add DATA, DATA, #4
+		}
+		| vstmia DATA!, {d0-d1}
+		regs->exs+=4;
 	}
 #else
 	if(size==1){
@@ -1117,9 +1134,28 @@ void compile_function(lua_State* L, cfunction func, int ct_usr, const struct cty
     }
 
     if (ct->has_var_arg) {
-        | add r3, sp,#(regs.ints<<2) //no hard floating point in variadic procedure
+		int offset=nargs+1;
+        | mov r1, #offset
+		#if ARM_HF
+		    if(regs.ints==4||regs.float_sealed){
+				if(regs.ints<4&&regs.float_sealed){//some arg must be loaded to core registers.
+                    | add r2, sp,#((regs.ints<<2)+0x40)
+					| add r3, sp,#(0x10+0x40)
+					| lcall extern unpack_varargs_bound
+					| add r1, r0, #offset
+				}
+				| mov r3, DATA
+			} 
+		#else
+			if(regs.ints==4){
+				| mov r3, DATA
+			}
+		#endif
+		else{//no hard floating point in variadic procedure
+			| add r3, sp,#((regs.ints<<2)+ARM_HF*0x40	) 
+		}
+        
         | mov r2, TOP
-        | mov r1, #nargs+1
         | lcall extern unpack_varargs_stack
 		regs.ints=4;
     } 
@@ -1152,7 +1188,9 @@ void compile_function(lua_State* L, cfunction func, int ct_usr, const struct cty
 			| vldr d0, [sp]
 			break;
 	}
-	| add sp,sp,#0x40
+	if(ct->has_var_arg||nargs>0){
+		| add sp,sp,#0x40
+	}
 	#endif
 	|.endif
 	
@@ -1166,7 +1204,22 @@ void compile_function(lua_State* L, cfunction func, int ct_usr, const struct cty
 	case 2:
 	case 1:
 		| pop {r0,r1}
+		#if ARM_HF
+		if(regs.highest_bit){
+			|.if ARM_HF
+			| add sp, sp, #0x8
+			|.endif
+		}
+		#endif
+		break;
 	default:
+		#if ARM_HF
+		if(regs.highest_bit){
+			|.if ARM_HF
+			| add sp, sp, #0x10
+			|.endif
+		}
+		#endif
 		break;
 	}
 	

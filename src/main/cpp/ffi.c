@@ -478,6 +478,21 @@ void unpack_varargs_stack(lua_State* L, int first, int last, char* to)
         to += size;
     }
 }
+
+int unpack_varargs_bound(lua_State*L ,int first,char* to,char* end){
+    int i;
+    int64_t restore=*(int64_t*)end;
+    for (i = first;to<end ; i++) {
+        size_t size = unpack_vararg(L, i, to);
+        to += size;
+        if(to>end){
+            *(int64_t*)end=restore;// restore if overlapped;
+            i--;
+        }
+    }
+    return i;
+}
+
 // complex arg is not supported
 static ALWAYS_INLINE int isFloatArg(lua_State* L,int idx){
 	int type = lua_type(L,idx);

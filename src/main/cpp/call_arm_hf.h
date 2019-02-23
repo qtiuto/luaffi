@@ -19,7 +19,7 @@
 #error "Version mismatch between DynASM and included encoding engine"
 #endif
 
-static const unsigned int build_actionlist[735] = {
+static const unsigned int build_actionlist[766] = {
 0xed0d0a00,
 0x000f8100,
 0x00000000,
@@ -403,8 +403,8 @@ static const unsigned int build_actionlist[735] = {
 0xeb000000,
 0x00030012,
 0x00000000,
-0xec564b10,
 0xe1a00004,
+0xec564b10,
 0xe3e01002,
 0xeb000000,
 0x0003000b,
@@ -472,6 +472,16 @@ static const unsigned int build_actionlist[735] = {
 0xed0d0a00,
 0x000f8100,
 0x00000000,
+0xeca60a01,
+0x00000000,
+0xe2866004,
+0x00000000,
+0xeca60b02,
+0x00000000,
+0xe2866004,
+0x00000000,
+0xeca60b04,
+0x00000000,
 0xe1a0c00d,
 0xe92d5870,
 0xe1a0b00c,
@@ -512,6 +522,7 @@ static const unsigned int build_actionlist[735] = {
 0xeb000000,
 0x00030001,
 0xe24dd008,
+0xe2466008,
 0xe58d0000,
 0x00000000,
 0xe3003000,
@@ -598,14 +609,30 @@ static const unsigned int build_actionlist[735] = {
 0xeb000000,
 0x00030014,
 0x00000000,
-0xe28d3000,
-0x000b0000,
-0xe1a02005,
 0xe3a01000,
+0x000b0000,
+0x00000000,
+0xe28d2000,
+0x000b0000,
+0xe28d3000,
 0x000b0000,
 0xe1a00004,
 0xeb000000,
 0x00030018,
+0xe2801000,
+0x000b0000,
+0x00000000,
+0xe1a03006,
+0x00000000,
+0xe1a03006,
+0x00000000,
+0xe28d3000,
+0x000b0000,
+0x00000000,
+0xe1a02005,
+0xe1a00004,
+0xeb000000,
+0x00030019,
 0x00000000,
 0xec9d0b10,
 0x00000000,
@@ -628,6 +655,10 @@ static const unsigned int build_actionlist[735] = {
 0xe8bd000f,
 0x00000000,
 0xe8bd0003,
+0x00000000,
+0xe28dd008,
+0x00000000,
+0xe28dd010,
 0x00000000,
 0xe300c000,
 0x000c0200,
@@ -713,7 +744,7 @@ static const unsigned int build_actionlist[735] = {
 0x00000000,
 0xe1a00004,
 0xeb000000,
-0x00030019,
+0x0003001a,
 0x00000000,
 0xe1a00004,
 0xeb000000,
@@ -785,6 +816,7 @@ static const char *const extnames[] = {
   "lua_gettop",
   "luaL_error",
   "check_typed_cfunction",
+  "unpack_varargs_bound",
   "unpack_varargs_stack",
   "push_uint",
   (const char *)0
@@ -811,6 +843,9 @@ static const char *const extnames[] = {
 #define ARM_HF 1
 #else
 #define ARM_HF 0
+#endif
+#if ARM_HF&&!CK_ALGIN
+#error "Unsupported unaligned stack for hard floating point"
 #endif	
 static void compile_extern_jump(struct jit* jit, lua_State* L, cfunction func, uint8_t* code)
 {
@@ -894,7 +929,7 @@ static ALWAYS_INLINE void add_int64_reg(reg_info* regs){
 static void save_float_reg(struct jit* Dst,int reg,int size,stack_info* st){
 	if(reg==-1) return;
 	switch(size){
-	case 1:
+	case 4:
 		switch(reg){
 			case 0:
 				dasm_put(Dst, 0, st->float_size);
@@ -946,7 +981,7 @@ static void save_float_reg(struct jit* Dst,int reg,int size,stack_info* st){
 				break;
 		}
 		break;
-	case 2:
+	case 8:
 		switch(reg>>1){
 			case 0:
 				dasm_put(Dst, 48, st->float_size);
@@ -1087,7 +1122,7 @@ static void load_stack(struct jit* Dst,stack_info* st,int size,int align){
 
 static void load_int(struct jit* Dst,stack_info* st,int size,int align){
 	FIX_ALIGN(st->int_off,align);
-	if(st->int_off<MAX_REGS*4){
+	if(st->int_off<0x40*ARM_HF+MAX_REGS*4){
 		load_reg(Dst,st->int_off+st->extra,size);
 		st->int_off+=size;
 	}else{
@@ -1138,13 +1173,13 @@ static void push_regs(lua_State* L,struct jit* Dst,int ct_usr,int nargs,stack_in
 		}else{
 			switch(mt->type){
 				case COMPLEX_DOUBLE_TYPE:
-					save_float_reg(Dst,add_float_reg(&regs,2),2,st);
+					save_float_reg(Dst,add_float_reg(&regs,2),8,st);
 				case DOUBLE_TYPE:
 				case COMPLEX_FLOAT_TYPE:// Though complex alignment is 4, but vfp requires a sequence of regsiters
-					save_float_reg(Dst,add_float_reg(&regs,2),2,st);
+					save_float_reg(Dst,add_float_reg(&regs,2),8,st);
 					break;
 				case FLOAT_TYPE:
-					save_float_reg(Dst,add_float_reg(&regs,1),1,st);
+					save_float_reg(Dst,add_float_reg(&regs,1),4,st);
 					break;
 				case INT64_TYPE:
 					add_int64_reg(&regs);
@@ -1153,6 +1188,7 @@ static void push_regs(lua_State* L,struct jit* Dst,int ct_usr,int nargs,stack_in
 					add_int_reg(&regs);//no need to check type support here
 			}
 		}
+		lua_pop(L,1);
 	}
 	st->float_off+=st->int_off;
 	st->int_off+=0x40;
@@ -1431,14 +1467,16 @@ cfunction compile_callback(lua_State* L, int fidx, int ct_usr, const struct ctyp
             dasm_put(Dst, 366);
 			#if ARM_HF
 			dasm_put(Dst, 371);
+			lua_pop(L, 1);
 			#else
             goto single;
 			#endif
-
+			break;
         case DOUBLE_TYPE:
             dasm_put(Dst, 378);
 			#if ARM_HF
 			dasm_put(Dst, 383);
+			lua_pop(L, 1);
             #else
 			goto dual;
 			#endif
@@ -1530,28 +1568,39 @@ static ALWAYS_INLINE void save_int(struct jit* Dst,reg_info* regs){
 }
 static void save_float(struct jit* Dst,reg_info* regs,int size,int align){
 #if ARM_HF
-	if(regs->float_sealed){
+	if(!regs->float_sealed){
 		int reg=add_float_reg(regs,size);
 		if(reg<0) goto SAVE_STACK;
 		switch(size){
 		case 4:
-			dasm_put(Dst, 443, (regs->regs<<2)+8);
+			dasm_put(Dst, 443, (reg<<2)+8);
 		case 2:
-			dasm_put(Dst, 446, (regs->regs<<2));
+			dasm_put(Dst, 446, (reg<<2));
 			break;
 		case 1:
-			dasm_put(Dst, 449, (regs->regs<<2));
+			dasm_put(Dst, 449, (reg<<2));
 			break;
 		}
+		return;
 	}
 	SAVE_STACK:
 	if(size==1){
-		save_int_stack_align(Dst,regs);
+		dasm_put(Dst, 452);
+		regs->exs++;
 	}else if(size==2){
-		save_int64_stack_align(Dst,regs,align);
+		if(align&&!ALIGNED(regs->exs,2)){
+			regs->exs++;
+			dasm_put(Dst, 454);
+		}
+		dasm_put(Dst, 456);
+		regs->exs+=2;
 	}else if(size==4){
-		save_int64_stack_align(Dst,regs,1);
-		save_int64_stack_align(Dst,regs,1);
+		if(!ALIGNED(regs->exs,2)){
+			regs->exs++;
+			dasm_put(Dst, 458);
+		}
+		dasm_put(Dst, 460);
+		regs->exs+=4;
 	}
 #else
 	if(size==1){
@@ -1579,10 +1628,10 @@ void compile_function(lua_State* L, cfunction func, int ct_usr, const struct cty
 
     dasm_setup(Dst, build_actionlist);
 
-    dasm_put(Dst, 452);
+    dasm_put(Dst, 462);
 	
     if (ct->has_var_arg) {
-        dasm_put(Dst, 457, nargs, (unsigned short)("too few arguments"), (((unsigned int)("too few arguments"))>>16));
+        dasm_put(Dst, 467, nargs, (unsigned short)("too few arguments"), (((unsigned int)("too few arguments"))>>16));
     } 
 
     /* reserve enough stack space for all of the arguments (16 bytes per
@@ -1590,9 +1639,9 @@ void compile_function(lua_State* L, cfunction func, int ct_usr, const struct cty
 	 * leave extra 64 bytes
 	 */
 	if (ct->has_var_arg){
-		dasm_put(Dst, 474);
+		dasm_put(Dst, 484);
 	}else if(nargs>0){
-		dasm_put(Dst, 478, (0x40*1+(nargs<<4)), 0x40*1+0x10);
+		dasm_put(Dst, 488, (0x40*1+(nargs<<4)), 0x40*1+0x10);
 		
 	} 
 	memset(&regs,0,sizeof(reg_info));// Complex type is return in the address stored in r0 for softfp 
@@ -1602,7 +1651,7 @@ void compile_function(lua_State* L, cfunction func, int ct_usr, const struct cty
 	retByAddr=!mt->pointers && !mt->is_reference && (mt->type==COMPLEX_DOUBLE_TYPE||mt->type==COMPLEX_FLOAT_TYPE);
     if (retByAddr) {	
 		regs.ints++;
-		dasm_put(Dst, 483, (unsigned short)(mt), (((unsigned int)(mt))>>16));
+		dasm_put(Dst, 493, (unsigned short)(mt), (((unsigned int)(mt))>>16));
 	}
 	lua_pop(L,1);
 	#endif
@@ -1613,80 +1662,80 @@ void compile_function(lua_State* L, cfunction func, int ct_usr, const struct cty
             lua_getuservalue(L, -1);
             num_upvals += 2;
 
-            dasm_put(Dst, 494, (unsigned short)(mt), (((unsigned int)(mt))>>16), (unsigned short)(lua_upvalueindex(num_upvals)), (((unsigned int)(lua_upvalueindex(num_upvals)))>>16), i);
+            dasm_put(Dst, 505, (unsigned short)(mt), (((unsigned int)(mt))>>16), (unsigned short)(lua_upvalueindex(num_upvals)), (((unsigned int)(lua_upvalueindex(num_upvals)))>>16), i);
 			
             if (mt->pointers || mt->is_reference) {
-                dasm_put(Dst, 505);
+                dasm_put(Dst, 516);
             } else if (mt->type == FUNCTION_PTR_TYPE) {
-                dasm_put(Dst, 509);
+                dasm_put(Dst, 520);
             } else if (mt->type == ENUM_TYPE) {
-                dasm_put(Dst, 513);
+                dasm_put(Dst, 524);
             }
 
             save_int(Dst,&regs);
         } else {
             lua_pop(L, 1);
-            dasm_put(Dst, 517, i);
+            dasm_put(Dst, 528, i);
 
             switch (mt->type) {
 			case BOOL_TYPE:
-				dasm_put(Dst, 520);
+				dasm_put(Dst, 531);
                 save_int(Dst,&regs);
                 break;
             case INT8_TYPE:
-                dasm_put(Dst, 526);
+                dasm_put(Dst, 537);
                 if (mt->is_unsigned) {
-                     dasm_put(Dst, 530);
+                     dasm_put(Dst, 541);
                 } else {
-                     dasm_put(Dst, 532);
+                     dasm_put(Dst, 543);
                 }
                 save_int(Dst,&regs);
                 break;
 
             case INT16_TYPE:
-                dasm_put(Dst, 534);
+                dasm_put(Dst, 545);
                 if (mt->is_unsigned) {
-                    dasm_put(Dst, 538);
+                    dasm_put(Dst, 549);
                 } else {
-                    dasm_put(Dst, 540);
+                    dasm_put(Dst, 551);
                 }
                 save_int(Dst,&regs);
                 break;
 
             case INT32_TYPE:
                 if (mt->is_unsigned) {
-                    dasm_put(Dst, 542);
+                    dasm_put(Dst, 553);
                 } else {
-                    dasm_put(Dst, 546);
+                    dasm_put(Dst, 557);
                 }
                 save_int(Dst,&regs);
                 break;
             case INTPTR_TYPE:
-                dasm_put(Dst, 550);
+                dasm_put(Dst, 561);
                 save_int(Dst,&regs);
 				break;
 
             case INT64_TYPE:
                 if (mt->is_unsigned) {
-                    dasm_put(Dst, 554);
+                    dasm_put(Dst, 565);
                 } else {
-                    dasm_put(Dst, 558);
+                    dasm_put(Dst, 569);
                 }
 				save_int64(Dst,&regs);
                 break;
 
             case DOUBLE_TYPE:
-				dasm_put(Dst, 562);
+				dasm_put(Dst, 573);
 				save_float(Dst,&regs,2,1);
                 break;
 
             case FLOAT_TYPE:
-				dasm_put(Dst, 566);
+				dasm_put(Dst, 577);
                 save_float(Dst,&regs,1,1);
                 break;
 			case COMPLEX_DOUBLE_TYPE:
 				#if ARM_HF
-				dasm_put(Dst, 570);
+				dasm_put(Dst, 581);
 				save_float(Dst,&regs,4,1);
 				#else
 				FIX_ALIGN(regs.ints,2);
@@ -1702,7 +1751,7 @@ void compile_function(lua_State* L, cfunction func, int ct_usr, const struct cty
 				break;
 			case COMPLEX_FLOAT_TYPE:
 				#if ARM_HF
-				dasm_put(Dst, 574);
+				dasm_put(Dst, 585);
 				save_float(Dst,&regs,2,0);
 				#else
 				if(regs.ints<4){
@@ -1723,56 +1772,86 @@ void compile_function(lua_State* L, cfunction func, int ct_usr, const struct cty
     }
 
     if (ct->has_var_arg) {
-        dasm_put(Dst, 578, (regs.ints<<2), nargs+1);
+		int offset=nargs+1;
+        dasm_put(Dst, 589, offset);
+		#if ARM_HF
+		    if(regs.ints==4||regs.float_sealed){
+				if(regs.ints<4&&regs.float_sealed){//some arg must be loaded to core registers.
+					dasm_put(Dst, 592, ((regs.ints<<2)+0x40), (0x10+0x40), offset);
+				}
+				dasm_put(Dst, 602);
+			} 
+		#else
+			if(regs.ints==4){
+				dasm_put(Dst, 604);
+			}
+		#endif
+		else{//no hard floating point in variadic procedure
+			dasm_put(Dst, 606, ((regs.ints<<2)+1*0x40	));
+		}
+        
+        dasm_put(Dst, 609);
 		regs.ints=4;
     } 
 	
 	#if ARM_HF
 	switch(ROUND_UP(regs.highest_bit,4)>>1){
 		case 8 :
-			dasm_put(Dst, 587);
+			dasm_put(Dst, 614);
 			break;
 		case 7 :
-			dasm_put(Dst, 589);
+			dasm_put(Dst, 616);
 			break;
 		case 6 :
-			dasm_put(Dst, 591);
+			dasm_put(Dst, 618);
 			break;
 		case 5:
-			dasm_put(Dst, 593);
+			dasm_put(Dst, 620);
 			break;
 		case 4 :
-			dasm_put(Dst, 595);
+			dasm_put(Dst, 622);
 			break;
 		case 3 :
-			dasm_put(Dst, 597);
+			dasm_put(Dst, 624);
 			break;
 		case 2 :
-			dasm_put(Dst, 599);
+			dasm_put(Dst, 626);
 			break;
 		case 1 :
-			dasm_put(Dst, 601);
+			dasm_put(Dst, 628);
 			break;
 	}
-	dasm_put(Dst, 603);
+	if(ct->has_var_arg||nargs>0){
+		dasm_put(Dst, 630);
+	}
 	#endif
 	
 	//pop registers from stack,align 8 for some compiler
-	
+	assert(regs.ints<=4);
 	switch(regs.ints){
 	case 4:
 	case 3:
-		dasm_put(Dst, 605);
+		dasm_put(Dst, 632);
 		break;
 	case 2:
 	case 1:
-		dasm_put(Dst, 607);
+		dasm_put(Dst, 634);
+		#if ARM_HF
+		if(regs.highest_bit){
+			dasm_put(Dst, 636);
+		}
+		#endif
 		break;
 	default:
-		abort();
+		#if ARM_HF
+		if(regs.highest_bit){
+			dasm_put(Dst, 638);
+		}
+		#endif
+		break;
 	}
 	
-	dasm_put(Dst, 609, (unsigned short)(func), (((unsigned int)(func))>>16));
+	dasm_put(Dst, 640, (unsigned short)(func), (((unsigned int)(func))>>16));
 
 
     lua_rawgeti(L, ct_usr, 0);
@@ -1781,7 +1860,7 @@ void compile_function(lua_State* L, cfunction func, int ct_usr, const struct cty
     if (mt->pointers || mt->is_reference || mt->type==FUNCTION_PTR_TYPE) {
         lua_getuservalue(L, -1);
         num_upvals += 2;
-        dasm_put(Dst, 615, (unsigned short)(mt), (((unsigned int)(mt))>>16), (unsigned short)(lua_upvalueindex(num_upvals)), (((unsigned int)(lua_upvalueindex(num_upvals)))>>16));
+        dasm_put(Dst, 646, (unsigned short)(mt), (((unsigned int)(mt))>>16), (unsigned short)(lua_upvalueindex(num_upvals)), (((unsigned int)(lua_upvalueindex(num_upvals)))>>16));
 
     } else {
         switch (mt->type) {
@@ -1789,31 +1868,31 @@ void compile_function(lua_State* L, cfunction func, int ct_usr, const struct cty
         #if LUA_VERSION_NUM>=503
              lua_pop(L, 1);
 	    #if CK_ALGIN
-            dasm_put(Dst, 631);
+            dasm_put(Dst, 662);
 		#else
-            dasm_put(Dst, 634);
+            dasm_put(Dst, 665);
 		#endif		
-            dasm_put(Dst, 637);
+            dasm_put(Dst, 668);
             break;
 		#else
 			num_upvals++;
-            dasm_put(Dst, 643, (unsigned short)(mt), (((unsigned int)(mt))>>16));
+            dasm_put(Dst, 674, (unsigned short)(mt), (((unsigned int)(mt))>>16));
             break;
         #endif
 		
         case INTPTR_TYPE:
             num_upvals++;
-            dasm_put(Dst, 658, (unsigned short)(mt), (((unsigned int)(mt))>>16));
+            dasm_put(Dst, 689, (unsigned short)(mt), (((unsigned int)(mt))>>16));
             break;
 
         case VOID_TYPE:
             lua_pop(L, 1);
-            dasm_put(Dst, 671);
+            dasm_put(Dst, 702);
             break;
 
         case BOOL_TYPE:
             lua_pop(L, 1);
-            dasm_put(Dst, 674);
+            dasm_put(Dst, 705);
             break;
 
         case INT8_TYPE:
@@ -1824,32 +1903,32 @@ void compile_function(lua_State* L, cfunction func, int ct_usr, const struct cty
 			switch(mt->type){
 				case INT8_TYPE:
 					if (mt->is_unsigned) {
-						dasm_put(Dst, 681);
+						dasm_put(Dst, 712);
 					} else {
-						dasm_put(Dst, 683);
+						dasm_put(Dst, 714);
 					}
 					break;
 				case INT16_TYPE:
 					if (mt->is_unsigned) {
-						dasm_put(Dst, 685);
+						dasm_put(Dst, 716);
 					} else {
-						dasm_put(Dst, 687);
+						dasm_put(Dst, 718);
 					}
 					break;
 			}
-            dasm_put(Dst, 689);
+            dasm_put(Dst, 720);
             if (mt->is_unsigned) {
-                dasm_put(Dst, 691);
+                dasm_put(Dst, 722);
             } else {
-                dasm_put(Dst, 695);
+                dasm_put(Dst, 726);
             }
 			
-            dasm_put(Dst, 699);
+            dasm_put(Dst, 730);
             break;
 
         case FLOAT_TYPE:
             lua_pop(L, 1);
-            dasm_put(Dst, 702);
+            dasm_put(Dst, 733);
             break;
 
         case DOUBLE_TYPE:
@@ -1857,25 +1936,25 @@ void compile_function(lua_State* L, cfunction func, int ct_usr, const struct cty
         #if CK_ALGIN
 		#else
 		#endif	
-            dasm_put(Dst, 708);
+            dasm_put(Dst, 739);
             break;
 		case COMPLEX_DOUBLE_TYPE:
 		case COMPLEX_FLOAT_TYPE:
 			lua_getuservalue(L,-1);
             num_upvals += 2;
 			#if ARM_HF
-			dasm_put(Dst, 714, (unsigned short)(mt), (((unsigned int)(mt))>>16), (unsigned short)(lua_upvalueindex(num_upvals)), (((unsigned int)(lua_upvalueindex(num_upvals)))>>16));
+			dasm_put(Dst, 745, (unsigned short)(mt), (((unsigned int)(mt))>>16), (unsigned short)(lua_upvalueindex(num_upvals)), (((unsigned int)(lua_upvalueindex(num_upvals)))>>16));
 			if(mt->type==COMPLEX_DOUBLE_TYPE){
-				dasm_put(Dst, 727);
+				dasm_put(Dst, 758);
 			}else{
-				dasm_put(Dst, 730);
+				dasm_put(Dst, 761);
 			}
 			#else
             // value are stored in return storage in r0 for softfp, set usr value here
 			if(!lua_isnil(L,-1)){
 			}
 			#endif
-            dasm_put(Dst, 732);
+            dasm_put(Dst, 763);
 			break;
         default:
             luaL_error(L, "NYI: call return type");

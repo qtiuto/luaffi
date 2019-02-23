@@ -48,7 +48,6 @@ static void SetLastError(int err)
 //See http://code.google.com/p/v8/issues/detail?id=2140 for more information
 #if defined(__ARM_PCS_VFP) || (GCC_VERSION==40500||defined(__clang__))&&!defined(__ARM_PCS) && !defined(__SOFTFP__) && !defined(__SOFTFP) && \
     defined(__VFP_FP__)
-#warning "Hard floating point pcs support is not tested"
 #include "call_arm_hf.h"
 #else
 #include "call_arm.h"
@@ -201,6 +200,9 @@ static void* reserve_code(struct jit* jit, lua_State* L, size_t sz)
         ADDFUNC(NULL, unpack_varargs_reg);
         ADDFUNC(NULL, unpack_varargs_float);
         ADDFUNC(NULL, unpack_varargs_int);
+#if ARM_HF
+        ADDFUNC(NULL, unpack_varargs_bound);
+#endif
         ADDFUNC(NULL, push_cdata);
         ADDFUNC(NULL, push_int);
         ADDFUNC(NULL, push_uint);
