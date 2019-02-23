@@ -127,13 +127,13 @@ set (SRCS
 add_library(ffi SHARED
         ${HEADERS}
         ${SRCS} )
-target_link_libraries(libffi ${LUA_LIBRARIES})
-set_target_properties(libffi PROPERTIES PREFIX "")
+target_link_libraries(ffi ${LUA_LIBRARIES})
+set_target_properties(ffi PROPERTIES PREFIX "")
 if (APPLE)
-    set_target_properties(libffi PROPERTIES LINK_FLAGS "-undefined dynamic_lookup")
+    set_target_properties(ffi PROPERTIES LINK_FLAGS "-undefined dynamic_lookup")
 endif()
 if(NOT ANDROID)
-    install(TARGETS libffi
+    install(TARGETS ffi
         RUNTIME DESTINATION bin
         ARCHIVE DESTINATION lib
         LIBRARY DESTINATION lib)
@@ -149,4 +149,6 @@ if (FFITEST STREQUAL '1')
     if (APPLE)
         set_target_properties(libffitest PROPERTIES LINK_FLAGS "-undefined dynamic_lookup")
     endif ()
+    add_executable(test_runner test_runner.c)
+    target_link_libraries(test_runner ${LUA_LIBRARIES})
 endif ()
