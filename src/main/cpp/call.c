@@ -208,8 +208,6 @@ static void* reserve_code(struct jit* jit, lua_State* L, size_t sz)
         ADDFUNC(NULL, push_uint);
         ADDFUNC(NULL, lua_pushinteger);
         ADDFUNC(NULL, push_float);
-        //ADDFUNC(jit->kernel32_dll, SetLastError);
-        //ADDFUNC(jit->kernel32_dll, GetLastError);
         ADDFUNC(jit->lua_dll, luaL_error);
         ADDFUNC(jit->lua_dll, lua_pushnumber);
         ADDFUNC(jit->lua_dll, lua_pushboolean);
