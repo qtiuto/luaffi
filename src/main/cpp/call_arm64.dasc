@@ -324,7 +324,7 @@ cfunction compile_callback(lua_State* L, int fidx, int ct_usr, const struct ctyp
 				
                 break;
 
-            case INT8_TYPE:
+            case INT8_TYPE:// need to narrow for caller doesn't do it
 				lua_pop(L, 1);
 				if(regs.ints<8){
 					if (mt->is_unsigned) {
@@ -342,7 +342,7 @@ cfunction compile_callback(lua_State* L, int fidx, int ct_usr, const struct ctyp
 				| lcall extern push_int
 				break;
 			
-            case INT16_TYPE:
+            case INT16_TYPE:// need to narrow for caller doesn't do it
 				lua_pop(L, 1);
 				if(regs.ints<8){
 					if (mt->is_unsigned) {
@@ -431,33 +431,14 @@ cfunction compile_callback(lua_State* L, int fidx, int ct_usr, const struct ctyp
         case BOOL_TYPE:
         case INT8_TYPE:
         case INT16_TYPE:
-        case INT32_TYPE:
+        case INT32_TYPE: //caller's responsiblity to narrow 
 		    | movn w1,#0
             if (mt->is_unsigned) {
                 | lcall extern check_uint32
             } else {
                 | lcall extern check_int32
             }
-			switch(mt->type){
-				case BOOL_TYPE:
-					| cmp w0, wzr
-					| cset w0, ne
-					break;
-				case INT8_TYPE:
-					if (mt->is_unsigned) {
-						| uxtb w0, w0
-					} else {
-						| sxtb w0 ,w0
-					}
-					break;
-				case INT16_TYPE:
-					if (mt->is_unsigned) {
-						| uxth w0, w0
-					} else {
-						| sxth w0 ,w0
-					}
-					break;
-			}
+			
             goto single;
 
         case INT64_TYPE:
@@ -663,43 +644,23 @@ void compile_function(lua_State* L, cfunction func, int ct_usr, const struct cty
 
             switch (mt->type) {
             case BOOL_TYPE:
-                | lcall extern check_int32
+                | lcall extern check_uint32
                 | cmp w0, wzr
                 | cset w0, ne
                 goto intstore;
 				
             case INT8_TYPE:
-                | lcall extern check_int32
-                if (mt->is_unsigned) {
-                    | uxtb w0,w0
-                } else {
-                    | sxtb w0,w0                
-                }
-				goto intstore;
-
-            case INT16_TYPE:
-                | lcall extern check_int32
-                if (mt->is_unsigned) {
-                    | uxth w0,w0
-                } else {
-                    | sxth w0,w0                
-                }
-				goto intstore;
-
+            case INT16_TYPE: //arm64 requires callee to narrow the type
             case INT32_TYPE:
-                if (mt->is_unsigned) {
-                    | lcall extern check_uint32
-                } else {
-                    | lcall extern check_int32
-                }
+                
+                | lcall extern check_int32
+                
  				goto intstore;
 
             case INT64_TYPE:
-                if (mt->is_unsigned) {
-                    | lcall extern check_uint64
-                } else {
-                    | lcall extern check_int64
-                }
+               
+                | lcall extern check_int64
+               
               	goto longstore;
 				
             case INTPTR_TYPE:
@@ -869,7 +830,7 @@ void compile_function(lua_State* L, cfunction func, int ct_usr, const struct cty
             | return
             break;
 
-        case INT8_TYPE:
+        case INT8_TYPE:// we need to narrow the value before return
 			lua_pop(L, 1);
             | mov w1, w0
             if (mt->is_unsigned) {
@@ -882,7 +843,7 @@ void compile_function(lua_State* L, cfunction func, int ct_usr, const struct cty
             | mov w0, #1
             | return
 			break;
-        case INT16_TYPE:
+        case INT16_TYPE:// we need to narrow the value before return
 			lua_pop(L, 1);
             | mov w1, w0
             if (mt->is_unsigned) {

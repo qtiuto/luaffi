@@ -575,28 +575,8 @@ cfunction compile_callback(lua_State* L, int fidx, int ct_usr, const struct ctyp
                 | lcall extern lua_pushboolean
                 break;
 
-            case INT8_TYPE:
-                lua_pop(L, 1);
-				load_int(Dst,&st,4,4);
-                if (mt->is_unsigned) {
-					| uxtb r1, r1
-                }else{
-					| sxtb r1, r1
-				}
-                | lcall extern push_int
-                break;
-
-            case INT16_TYPE:
-                lua_pop(L, 1);
-				load_int(Dst,&st,4,4);
-                if (mt->is_unsigned) {
-					| uxth r1, r1
-                }else{
-					| sxth r1, r1
-				}
-                | lcall extern push_int
-                break;
-
+            case INT8_TYPE: // no need to narrow cause narrowed by caller
+            case INT16_TYPE: // no need to narrow cause narrowed by caller
             case ENUM_TYPE:
             case INT32_TYPE:
                 lua_pop(L, 1);
@@ -685,8 +665,8 @@ cfunction compile_callback(lua_State* L, int fidx, int ct_usr, const struct ctyp
             break;
 
         case BOOL_TYPE:
-        case INT8_TYPE:
-        case INT16_TYPE:
+        case INT8_TYPE:// narrow it 
+        case INT16_TYPE:// narrow it 
         case INT32_TYPE:
 		    | mvn r1, #0 // -1
             if (mt->is_unsigned) {
@@ -1302,24 +1282,9 @@ void compile_function(lua_State* L, cfunction func, int ct_usr, const struct cty
         case INT8_TYPE:
         case INT16_TYPE:
         case INT32_TYPE:
-        case ENUM_TYPE:
+        case ENUM_TYPE:// value must be narrowed before callee return
             lua_pop(L, 1);
-			switch(mt->type){
-				case INT8_TYPE:
-					if (mt->is_unsigned) {
-						| uxtb r0, r0
-					} else {
-						| sxtb r0 ,r0
-					}
-					break;
-				case INT16_TYPE:
-					if (mt->is_unsigned) {
-						| uxth r0, r0
-					} else {
-						| sxth r0 ,r0
-					}
-					break;
-			}
+			
             | mov r1, r0
             if (mt->is_unsigned) {
                 | lcall extern push_uint
