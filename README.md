@@ -20,4 +20,4 @@ Some known issues:
 1. unsupported bit operation.
 1. struct/union passed by value in function call/callback is unsupported
 
-To build it for systems other than Android, cd src/main/cpp and run the cmake ./ && make
+To build it for systems other than Android, `cd src/main/cpp` and run `cmake ./ && make` .
