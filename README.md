@@ -1,10 +1,10 @@
 The project is a ffi library for calling c functions, using c data structures, in pure lua environment. It also supports
 calling lua function from c functions. It's ported from luajit-ffi and is originally from 
 https://github.com/facebookarchive/luaffifb . I copy it from https://github.com/dibyendumajumdar/ravi-ffi.
-You can get some tutorial from the [luajit ffi page](http://luajit.org/ext_ffi.html).
+You can get some tutorials from the [luajit ffi page](http://luajit.org/ext_ffi.html).
 
-Comparing with standard lua c call, it can make up up to 75% in performance. Though this is slower than luajit-ffi, but 
-a lot better than libffi.
+Comparing with standard lua c call, it can make up up to 75% in performance. Slower than luajit-ffi though,  
+ this is a lot better than libffi.
 
 But there's still some change from the original lua ffi library:
  
