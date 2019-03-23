@@ -2,7 +2,6 @@
 cmake_minimum_required ( VERSION 2.8 )
 
 project(ffi)
-
 if(ANDROID)
     set(LUA_LIBRARIES ${CMAKE_CURRENT_SOURCE_DIR}/../lua/${ANDROID_ABI}/libluadroid.so)
     set(LUA_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../lib/src/main/externalLib/lua)
@@ -14,6 +13,7 @@ endif()
 message(STATUS "LUA_INCLUDE_DIR: ${LUA_INCLUDE_DIR}")
 message(STATUS "LUA_LIBRARIES  : ${LUA_LIBRARIES}")
 message(STATUS "FFITEST:${FFITEST}")
+message(STATUS "MSVC:${MSVC}")
 
 set( DASM_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dynasm )
 
@@ -143,7 +143,14 @@ if (FFITEST STREQUAL '1')
             test.c)
     if (MSVC)
         set_source_files_properties(test.c PROPERTIES COMPILE_FLAGS /Gd)
+        file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/luaffitest.lua DESTINATION ${PROJECT_BINARY_DIR}/Debug)
+        file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/luaffitest.lua DESTINATION ${PROJECT_BINARY_DIR}/Release)
+    else()
+        if(NOT (${CMAKE_CURRENT_SOURCE_DIR} STREQUAL ${PROJECT_BINARY_DIR}))
+            file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/luaffitest.lua DESTINATION ${PROJECT_BINARY_DIR}/)
+        endif()
     endif ()
+
     target_link_libraries(libffitest ffi)
     set_target_properties(libffitest PROPERTIES PREFIX "")
     if (APPLE)

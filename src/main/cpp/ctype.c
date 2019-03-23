@@ -162,9 +162,11 @@ void* push_cdata(lua_State* L, int ct_usr, const struct ctype* ct)
      * then writing the bits back) and the read is aligned its a non-issue,
      * but valgrind complains nonetheless.
      */
-    if (ct->has_bitfield) {
+    /* Changed:To allow fast write to memory for struct in 64-bit machine in jit
+     */
+    //if (ct->has_bitfield) {
         sz = ALIGN_UP(sz, 7);
-    }
+    //}
 
     cd = (struct cdata*) lua_newuserdata(L, sizeof(struct cdata) + sz);
     *(struct ctype*) &cd->type = *ct;

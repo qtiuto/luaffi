@@ -75,7 +75,47 @@ struct jit;
 #define LOGI(msg, ...) __android_log_print(ANDROID_LOG_INFO,"FFI",msg,##__VA_ARGS__)
 #define LOGW(msg, ...) __android_log_print(ANDROID_LOG_WARN,"FFI",msg,##__VA_ARGS__)
 #endif
+/* architectures */
+#if defined _WIN32 && defined UNDER_CE
+# define OS_CE
+#elif defined _WIN32
+# define OS_WIN
+#elif defined __APPLE__ && defined __MACH__
+# define OS_OSX
+#elif defined __ANDROID_API__
+#define OS_ANDROID
+#elif defined __linux__
+# define OS_LINUX
+#elif defined __FreeBSD__ || defined __OpenBSD__ || defined __NetBSD__
+# define OS_BSD
+#elif defined unix || defined __unix__ || defined __unix || defined _POSIX_VERSION || defined _XOPEN_VERSION
+# define OS_POSIX
+#endif
 
+/* architecture */
+#if defined __i386__ || defined _M_IX86
+# define ARCH_X86
+#elif defined __amd64__ || defined _M_X64
+# define ARCH_X64
+#elif defined __arm__ || defined __ARM__ || defined ARM || defined __ARM || defined __arm
+# define ARCH_ARM
+#elif defined __aarch64__
+# define ARCH_ARM64
+#elif defined __powerpc64__
+# define ARCH_PPC64
+#else
+# error
+#endif
+#if defined ARCH_X86 || defined ARCH_X64
+#define ALLOW_MISALIGNED_ACCESS
+#endif
+#ifdef OS_WIN
+#define ALWAYS_INLINE __forceinline
+#elif defined(__GNUC__)
+#define ALWAYS_INLINE __attribute__ ((always_inline))
+#else
+#define ALWAYS_INLINE inline
+#endif
 EXTERN_C EXPORT int luaopen_ffi(lua_State* L);
 
 static int lua_absindex2(lua_State* L, int idx) {
@@ -121,8 +161,8 @@ static char* luaL_prepbuffsize(luaL_Buffer* B, size_t sz) {
 }
 
 static ALWAYS_INLINE void lua_rawgetp(lua_State *L, int idx,void* p){
-    lua_pushlightuserdata(L, key);
-    lua_rawget(L, LUA_REGISTRYINDEX);
+    lua_pushlightuserdata(L, p);
+    lua_rawget(L, idx);
 }
 
 #elif LUA_VERSION_NUM >= 503
@@ -130,39 +170,6 @@ static void (lua_remove)(lua_State *L, int idx) {
     lua_remove(L, idx);
 }
 #endif
-
-/* architectures */
-#if defined _WIN32 && defined UNDER_CE
-# define OS_CE
-#elif defined _WIN32
-# define OS_WIN
-#elif defined __APPLE__ && defined __MACH__
-# define OS_OSX
-#elif defined __ANDROID_API__
-#define OS_ANDROID
-#elif defined __linux__
-# define OS_LINUX
-#elif defined __FreeBSD__ || defined __OpenBSD__ || defined __NetBSD__
-# define OS_BSD
-#elif defined unix || defined __unix__ || defined __unix || defined _POSIX_VERSION || defined _XOPEN_VERSION
-# define OS_POSIX
-#endif
-
-/* architecture */
-#if defined __i386__ || defined _M_IX86
-# define ARCH_X86
-#elif defined __amd64__ || defined _M_X64
-# define ARCH_X64
-#elif defined __arm__ || defined __ARM__ || defined ARM || defined __ARM || defined __arm
-# define ARCH_ARM
-#elif defined __aarch64__
-# define ARCH_ARM64
-#elif defined __powerpc64__
-# define ARCH_PPC64
-#else
-# error
-#endif
-
 
 #ifdef _WIN32
 
@@ -221,16 +228,7 @@ static void (lua_remove)(lua_State *L, int idx) {
 #   define EnableWrite(data, size) mprotect(data, size, PROT_READ|PROT_WRITE)
 #endif
 
-#if defined ARCH_X86 || defined ARCH_X64
-#define ALLOW_MISALIGNED_ACCESS
-#endif
-#ifdef OS_WIN
-#define ALWAYS_INLINE __force_inline
-#elif defined(__GNUC__)
-#define ALWAYS_INLINE __attribute__ ((always_inline))
-#else
-#define ALWAYS_INLINE inline
-#endif
+
 
 // Since arm jump range is always small, so bl extern is hardly compiled
 // as an direct offset to the destination. Unlike global extern functions which
@@ -294,6 +292,13 @@ struct jit {
 #else
 #define ALIGNED_DEFAULT PTR_ALIGN_MASK
 #endif
+
+#ifdef ARCH_ARM
+#define ALIGNED_MAX 7
+#else//for arm64 x86 x64
+#define ALIGNED_MAX 15
+#endif
+
 
 extern int jit_key;
 extern int ctype_mt_key;
@@ -389,6 +394,7 @@ struct ctype {
     };
     unsigned align_mask : 4; /* as (align bytes - 1) eg 7 gives 8 byte alignment */
     unsigned pointers : POINTER_BITS; /* number of dereferences to get to the base type including +1 for arrays */
+    unsigned is_empty :1;
     unsigned const_mask : POINTER_MAX + 1; /* const pointer mask, LSB is current pointer, +1 for the whether the base type is const */
     unsigned type : 5; /* value given by type enum above */
     unsigned is_reference : 1;
@@ -426,13 +432,18 @@ struct cdata {
 typedef void (*cfunction)(void);
 
 #ifdef HAVE_COMPLEX
+#if defined(_MSC_VER)
+typedef _Dcomplex complex_double;
+typedef _Fcomplex complex_float;
+#else
 typedef double complex complex_double;
 typedef float complex complex_float;
+#endif
 static ALWAYS_INLINE complex_double mk_complex_double(double real, double imag) {
-      return real + imag * 1i;
+      return (complex_double){real , imag };
 }
 static ALWAYS_INLINE complex_float mk_complex_float(double real, double imag) {
-      return real + imag * 1i;
+      return (complex_float){real , imag};
 }
 
 extern float cimagf(complex_float);
@@ -472,7 +483,7 @@ typedef struct {
 } complex_float;
 
 static ALWAYS_INLINE complex_double mk_complex_double(double real, double imag) {
-    return { real, imag };
+    return (complex_double){ real, imag };
 }
 static ALWAYS_INLINE complex_float mk_complex_float(double real, double imag) {
     return (complex_float){ real, imag };
@@ -498,14 +509,14 @@ static complex_double cpow(complex_double f, complex_double s) {
         double r = hypot(f.real, f.imag);
         r = pow(r, real);
         double theta = atan2(f.imag, f.real) * real;
-        return { r*cos(theta),r*sin(theta) };
+        return (complex_double){ r*cos(theta),r*sin(theta) };
     }
     double r= hypot(f.real, f.imag);
     double theta = atan2(f.imag, f.real);
     r = log(r);
-    f = { r * s.real - theta * s.imag ,r * s.imag + s.real*theta};
+    f = (complex_double) { r * s.real - theta * s.imag ,r * s.imag + s.real*theta};
     r = exp(f.real);
-    return {r*cos(f.imag),r*sin(f.imag)};
+    return (complex_double) {r*cos(f.imag),r*sin(f.imag)};
 }
 #endif
 
@@ -549,6 +560,7 @@ int32_t check_int32(lua_State* L, int idx);
 uint32_t check_uint32(lua_State* L, int idx);
 uintptr_t check_uintptr(lua_State* L, int idx);
 int32_t check_enum(lua_State* L, int idx, int to_usr, const struct ctype* tt);
+void* check_struct(lua_State*L,int idx, int to_usr,const struct ctype* ct);
 /* these two will always push a value so that we can create structs/functions on the fly */
 void* check_typed_pointer(lua_State* L, int idx, int to_usr, const struct ctype* tt);
 cfunction check_typed_cfunction(lua_State* L, int idx, int to_usr, const struct ctype* tt);
@@ -563,6 +575,3 @@ void unpack_varargs_float(lua_State* L, int first, int last, int max, char* to);
 void unpack_varargs_int(lua_State* L, int first, int last, int max, char* to);
 
 int unpack_varargs_bound(lua_State* L, int first, char* to,char* end);
-
-
-

@@ -8,9 +8,8 @@
  */
 #include "ffi.h"
 #include <math.h>
+#include <stdint.h>
 #include <inttypes.h>
-#include <dlfcn.h>
-#include <sys/syscall.h>
 
 /* Set to 1 to get extra debugging on print */
 #define DEBUG_TOSTRING 0
@@ -394,7 +393,14 @@ complex_double check_complex_double(lua_State* L, int idx)
 complex_float check_complex_float(lua_State* L, int idx)
 {
     complex_double d = check_complex_double(L, idx);
-    return (complex_float)d;
+#ifdef HAVE_COMPLEX
+	return (complex_float)d;
+#else
+	return (complex_float) { d.real, d.imag };
+#endif 
+
+    
+
 }
 
 static size_t unpack_vararg(lua_State* L, int i, char* to)
@@ -411,17 +417,17 @@ static size_t unpack_vararg(lua_State* L, int i, char* to)
 //IOS doesn't need alignment
 #if defined(ARCH_ARM)&&!defined(TARGET_OS_IPHONE)
 #define CHECK_ALIGN(CODE,RET_SIZE)\
-            ({int align=(uintptr_t)(to)&0b111?4:0;\
+            {int align=(uintptr_t)(to)&0b111?4:0;\
             to+=align;\
             {CODE;}\
-            return (RET_SIZE)+align; });
+            return (RET_SIZE)+align; }
 #else
-#define CHECK_ALIGN(CODE,RET_SIZE)({\
+#define CHECK_ALIGN(CODE,RET_SIZE){\
             {CODE;}\
-            return (RET_SIZE);})
+            return (RET_SIZE);}
 #endif
-
-        CHECK_ALIGN(*(double*) to = lua_tonumber(L, i) ,sizeof(double));
+		
+		CHECK_ALIGN({ *(double*)to = lua_tonumber(L, i); }, sizeof(double));
 
     case LUA_TSTRING:
         *(const char**) to = lua_tostring(L, i);
@@ -523,7 +529,7 @@ void unpack_varargs_stack_skip(lua_State* L, int first, int last, int ints_to_sk
             continue;
         }
 		//as aapcs_aarch64 says and x64 implementation, arg in stack has a minimum alignment 8;
-#ifdef __LP64__
+#if defined __LP64__ || defined(__amd64__) ||defined (_WIN64)
 		to += max(8,unpack_vararg(L,i,to));
 #else
         to += unpack_vararg(L, i, to);//never occurs
@@ -567,7 +573,7 @@ void unpack_varargs_reg(lua_State* L, int first, int last, char* to)
     }
 }
 
-/* to_enum tries to convert a value at idx to the enum type indicated by to_ct
+/* check_enum tries to convert a value at idx to the enum type indicated by to_ct
  * and uv to_usr. For strings this means it will do a string lookup for the
  * enum type. It leaves the stack unchanged. Will throw an error if the type
  * at idx can't be conerted.
@@ -608,7 +614,7 @@ err:
     return type_error(L, idx, NULL, to_usr, to_ct);
 }
 
-/* to_pointer tries converts a value at idx to a pointer. It fills out ct and
+/* check_pointer tries converts a value at idx to a pointer. It fills out ct and
  * pushes the uv of the found type. It will throw a lua error if it can not
  * convert the value to a pointer. */
 static void* check_pointer(lua_State* L, int idx, struct ctype* ct)
@@ -711,6 +717,15 @@ static ALWAYS_INLINE int is_same_type(lua_State* L, int usr1, int usr2, const st
 
 static void set_struct(lua_State* L, int idx, void* to, int to_usr, const struct ctype* tt, int check_pointers);
 
+void* check_struct(lua_State*L,int idx, int to_usr,const struct ctype* ct)
+{
+    if(lua_type(L,idx)==LUA_TUSERDATA){
+        return check_typed_pointer(L,idx,to_usr,ct);
+    }
+    void* p=push_cdata(L,to_usr,ct);
+    set_struct(L,idx,p,to_usr,ct,1);
+    return p;
+}
 /* to_typed_pointer converts a value at idx to a type tt with target uv to_usr
  * checking all types. May push a temporary value so that it can create
  * structs on the fly. */
@@ -1835,7 +1850,6 @@ static int cdata_index(lua_State* L)
     char* data;
     ptrdiff_t off;
 
-#include <sys/shm.h>
     lua_settop(L, 2);
     data = (char*) check_cdata(L, 1, &ct);
     assert(lua_gettop(L) == 3);
@@ -2080,7 +2094,7 @@ static int rank(const struct ctype* ct)
     case COMPLEX_FLOAT_TYPE:
         return 6;
     case INTPTR_TYPE:
-#if defined(__LP64__)
+#if defined(__LP64__) || defined(__amd64__) ||defined (_WIN64)
         return 4;
 #else
         return 1;
@@ -2488,6 +2502,7 @@ static int cdata_sub(lua_State* L)
 #define MULC(l,r,s) s.real = l.real * r.real - l.imag * r.imag, s.imag = l.real * r.imag + l.imag * r.real
 #define DIVC(l,r,s) s.real = (l.real * r.real + l.imag * r.imag) / (r.real * r.real + r.imag * r.imag), \
                     s.imag = (l.imag * r.real - l.real * r.imag) / (r.real * r.real + r.imag * r.imag)
+#define IDIVC(l,r,s) (void) l, (void) r, memset(&s, 0, sizeof(s)), luaL_error(L, "NYI: complex idiv")
 #define MODC(l,r,s) (void) l, (void) r, memset(&s, 0, sizeof(s)), luaL_error(L, "NYI: complex mod")
 #define POWC(l,r,s) cpow(l, r)
 #endif
@@ -2734,7 +2749,7 @@ static int cdata_tostring(lua_State* L)
         case COMPLEX_FLOAT_TYPE: {
             char buf[128];
             complex_float c = *(complex_float *) p;
-            snprintf(buf,128, "%g+%gi", creal(c), cimag(c));
+            snprintf(buf,128, "%g+%gi", crealf(c), cimagf(c));
             lua_pushstring(L, buf);
             return 1;
         }
@@ -2750,7 +2765,7 @@ static int cdata_tostring(lua_State* L)
 
         case INT64_TYPE: {
             char buf[64];
-            sprintf(buf, ct.is_unsigned ? "%"PRIu64 : "%"PRId64, *(uint64_t *) p);
+            sprintf(buf, ct.is_unsigned ? "%"PRIu64 : "%" PRId64, *(uint64_t *) p);
             lua_pushstring(L, buf);
             return 1;
         }
@@ -2781,15 +2796,22 @@ static int cdata_tostring(lua_State* L)
 
 static int ffi_errno(lua_State* L)
 {
-    struct jit* jit = get_jit(L);
-
+#ifdef _WIN32
+	if (!lua_isnoneornil(L, 1)) {
+		lua_pushinteger(L, GetLastError());
+		SetLastError((int)luaL_checknumber(L, 1));
+	}
+	else {
+		lua_pushinteger(L, GetLastError());
+	}
+#else
     if (!lua_isnoneornil(L, 1)) {
         lua_pushinteger(L, errno);
         errno =(int) luaL_checknumber(L, 1);
     } else {
         lua_pushinteger(L,errno);
     }
-
+#endif
     return 1;
 }
 
@@ -2839,35 +2861,30 @@ static int ffi_string(lua_State* L)
     if(!data){
         luaL_error(L,"null pointer for string call");
     }
-    if (is_void_ptr(&ct)) {
-        lua_pushlstring(L, data, (size_t) luaL_checknumber(L, 2));
-        return 1;
+    size_t sz;
 
-    } else if (ct.type == INT8_TYPE && ct.pointers == 1) {
-        size_t sz;
+    if (lua_isuserdata(L, 2)) {
+        ptrdiff_t val;
+        if (!cdata_tointeger(L, 2, &val)) {
+            type_error(L, 2, "int", 0, NULL);
+        }
+        sz = (size_t) val;
+    } else if (!lua_isnil(L, 2)) {
+        sz = (size_t) luaL_checknumber(L, 2);
 
-        if (lua_isuserdata(L, 2)) {
-            ptrdiff_t val;
-            if (!cdata_tointeger(L, 2, &val)) {
-                type_error(L, 2, "int", 0, NULL);
-            }
-            sz = (size_t) val;
-        } else if (!lua_isnil(L, 2)) {
-            sz = (size_t) luaL_checknumber(L, 2);
-
-        } else if (ct.is_array && !ct.is_variable_array) {
+    } else if (ct.type == INT8_TYPE && ct.pointers == 1){
+        if (ct.is_array && !ct.is_variable_array) {
             char* nul = memchr(data, '\0', ct.array_size);
             sz = nul ? nul - data : ct.array_size;
 
-        } else {
+        }else
             sz = strlen(data);
-        }
-
-        lua_pushlstring(L, data, sz);
-        return 1;
+    }else{
+        sz =ctype_size(L,&ct);
     }
 
-    return luaL_error(L, "unable to convert cdata to string");
+    lua_pushlstring(L, data, sz);
+    return 1;
 }
 
 static int ffi_copy(lua_State* L)
@@ -3297,7 +3314,6 @@ static int cmodule_gc(lua_State* L){
             } else
 #endif
             FreeLibrary(handle);
-
         }
     }
     return 0;
@@ -3547,7 +3563,7 @@ static int setup_upvals(lua_State* L)
 #undef STR
 #undef STR2
 #else
-        GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+        GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS ,
             (const char *)&lua_newstate, &libs[1]);
 #endif
 
@@ -3555,7 +3571,7 @@ static int setup_upvals(lua_State* L)
 #ifdef UNDER_CE
         libs[2] = LoadLibraryA("coredll.dll");
 #else
-        GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+        GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
             (const char *)&_fmode, &libs[2]);
 		libs[3] = LoadLibraryA("kernel32.dll");
         libs[4] = LoadLibraryA("user32.dll");
@@ -3657,7 +3673,7 @@ static int setup_upvals(lua_State* L)
         ct.base_size = sizeof(complex_double);
         pc = (complex_double*) push_cdata(L, 0, &ct);
 #ifdef HAVE_COMPLEX
-        *pc = 1i;
+        *pc = (complex_double){0,1};
 
 #include <complex.h>
 #else
@@ -3739,7 +3755,12 @@ static int setup_upvals(lua_State* L)
     lua_setfield(L, -2, "fpu");
 #elif defined ARCH_ARM
     lua_pushboolean(L, 1);
+#if defined(__ARM_PCS_VFP) || (GCC_VERSION==40500||defined(__clang__))&&!defined(__ARM_PCS) && !defined(__SOFTFP__) && !defined(__SOFTFP) && \
+    defined(__VFP_FP__)
+    lua_setfield(L, -2, "hardfp");
+#else
     lua_setfield(L, -2, "softfp");
+#endif
 #else
 #error
 #endif
@@ -3841,6 +3862,8 @@ int luaopen_ffi(lua_State* L)
     lua_setmetatable(L, -2);
     set_upval(L, &jit_key);
 
+
+
     lua_newtable(L);
     set_upval(L, &constants_key);
 
@@ -3876,12 +3899,12 @@ int luaopen_ffi(lua_State* L)
     lua_pushcclosure(L, &ffi_number, 1);
     lua_pushvalue(L, -1);
     lua_setglobal(L, "tonumber");
-    lua_setfield(L, -2, "number"); /* ffi.number */
+    lua_setfield(L, -2, "number"); // ffi.number 
 
     lua_getglobal(L, "type");
     lua_pushcclosure(L, &ffi_type, 1);
     lua_pushvalue(L, -1);
     lua_setglobal(L, "type");
-    lua_setfield(L, -2, "type"); /* ffi.type */
+    lua_setfield(L, -2, "type"); // ffi.type 
     return 1;
 }

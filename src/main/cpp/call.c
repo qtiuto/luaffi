@@ -23,13 +23,6 @@ static void push_uint(lua_State* L, unsigned int val)
 static void push_float(lua_State* L, float val)
 { lua_pushnumber(L, val); }
 
-#ifndef _WIN32
-static int GetLastError(void)
-{ return errno; }
-static void SetLastError(int err)
-{ errno = err; }
-#endif
-
 #ifdef NDEBUG
 #define shred(a,b,c)
 #else
@@ -140,8 +133,8 @@ int get_extern(struct jit* jit, uint8_t* addr, int idx, int type)
         return (int32_t)(jmp + sizeof(uint8_t*) - addr);
     }
 }
-static int rawgeti(lua_State* L,int idx,ptrdiff_t key){
-    return lua_rawgeti(L,idx,key);
+static void rawgeti(lua_State* L,int idx,ptrdiff_t key){
+     lua_rawgeti(L,idx,key);
 }
 
 static void* reserve_code(struct jit* jit, lua_State* L, size_t sz)
@@ -191,6 +184,7 @@ static void* reserve_code(struct jit* jit, lua_State* L, size_t sz)
         ADDFUNC(NULL, check_uint32);
         ADDFUNC(NULL, check_uintptr);
         ADDFUNC(NULL, check_enum);
+        ADDFUNC(NULL, check_struct);
         ADDFUNC(NULL, check_typed_pointer);
         ADDFUNC(NULL, check_typed_cfunction);
         ADDFUNC(NULL, check_complex_double);
@@ -200,6 +194,7 @@ static void* reserve_code(struct jit* jit, lua_State* L, size_t sz)
         ADDFUNC(NULL, unpack_varargs_reg);
         ADDFUNC(NULL, unpack_varargs_float);
         ADDFUNC(NULL, unpack_varargs_int);
+        ADDFUNC(NULL, memcpy);//for x86,x64 only
 #if ARM_HF
         ADDFUNC(NULL, unpack_varargs_bound);
 #endif
@@ -212,15 +207,22 @@ static void* reserve_code(struct jit* jit, lua_State* L, size_t sz)
         ADDFUNC(jit->lua_dll, lua_pushnumber);
         ADDFUNC(jit->lua_dll, lua_pushboolean);
         ADDFUNC(jit->lua_dll, lua_gettop);
-#if LUA_VERSION_NUM<503 || defined(__LP64__)
+#if LUA_VERSION_NUM<503 || defined(__LP64__) || defined(__amd64__) ||defined (_WIN64)
         ADD_FUNC_WITH_NAME(jit->lua_dll,rawgeti, lua_rawgeti);
 #else
         ADDFUNC(NULL,rawgeti);
+
+#endif
+#if LUA_VERSION_NUM<502
+        ADD_FUNC_WITH_NAME(jit->lua_dll, lua_setuservalue,lua_setfenv);
+#else
+        ADDFUNC(jit->lua_dll, lua_setuservalue);
 #endif
         ADDFUNC(jit->lua_dll, lua_pushnil);
         ADDFUNC(jit->lua_dll, lua_call);
         ADDFUNC(jit->lua_dll, lua_settop);
         ADDFUNC(jit->lua_dll, lua_remove);
+        ADDFUNC(jit->lua_dll, lua_pushvalue);
 #undef ADDFUNC
 
         for (i = 0; extnames[i] != NULL; i++) {

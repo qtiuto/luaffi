@@ -358,7 +358,7 @@ static void calculate_member_position(lua_State* L, struct parser* P, struct cty
 #ifdef _WIN32
             /* MSVC has a bug where it doesn't update the alignment of
              * a union for bitfield members. */
-            mt->align_mask = 0;
+            mt->ct.align_mask = 0;
 #endif
 
         } else if (mt->ct.is_array) {
@@ -380,30 +380,30 @@ static void calculate_member_position(lua_State* L, struct parser* P, struct cty
          * unit, but not necesserily using it yet.
          */
 
-        if (*pbitfield_type == -1 && mt->bit_size == 0) {
+        if (*pbitfield_type == -1 && mt->ct.bit_size == 0) {
             /* :0 not after a bitfield are ignored */
             return;
         }
 
         {
-            int different_storage = mt->align_mask != *pbitfield_type;
-            int no_room_left = bit_offset + mt->bit_size > (mt->align_mask + 1) * CHAR_BIT;
+            int different_storage = mt->ct.align_mask != *pbitfield_type;
+            int no_room_left = bit_offset + mt->ct.bit_size > (mt->ct.align_mask + 1) * CHAR_BIT;
 
-            if (different_storage || no_room_left || !mt->bit_size) {
+            if (different_storage || no_room_left || !mt->ct.bit_size) {
                 ct->base_size += (bit_offset + CHAR_BIT - 1) / CHAR_BIT;
                 bit_offset = 0;
                 if (*pbitfield_type >= 0) {
                     ct->base_size = ALIGN_UP(ct->base_size, *pbitfield_type);
                 }
-                ct->base_size = ALIGN_UP(ct->base_size, mt->align_mask);
+                ct->base_size = ALIGN_UP(ct->base_size, mt->ct.align_mask);
             }
         }
 
-        mt->bit_offset = bit_offset;
+        mt->ct.bit_offset = bit_offset;
         mt->offset = ct->base_size;
 
-        *pbitfield_type = mt->align_mask;
-        bit_offset += mt->bit_size;
+        *pbitfield_type = mt->ct.align_mask;
+        bit_offset += mt->ct.bit_size;
 
 // #elif defined OS_OSX
 //         /* OSX doesn't use containers and bitfields are not aligned. So
@@ -708,6 +708,7 @@ static int calculate_struct_offsets(lua_State* L, struct parser* P, int ct_usr, 
     /* only void is allowed 0 size */
     if (ct->base_size == 0) {
         ct->base_size = 1;
+        ct->is_empty=1;
     }
 
     ct->base_size = ALIGN_UP(ct->base_size, ct->align_mask);
@@ -1090,7 +1091,9 @@ static int parse_attribute(lua_State* L, struct parser* P, struct token* tok, st
 
                 switch (tok->type) {
                 case TOK_CLOSE_PAREN:
-                    align = ALIGNED_DEFAULT;
+                    //__attribute__((algined)) indicates max alignment
+                    //it only works for gcc
+                    align = ALIGNED_MAX;
                     put_back(P);
                     break;
 
