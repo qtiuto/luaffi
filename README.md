@@ -21,7 +21,7 @@ Some known issues:
 1. cdata doesn't equal to any lua value by operator **'=='** .
 1. complex number must be declared by ffi.new or ffi.cast.
 1. unsupported bit operation.
-1. struct/union passed by value in function call/callback is unsupported.
+1. struct/union/complex values passed by value in variadic procedure is unsupported.
 1. gcc extension vector type is unsupported.
 
 To build it for systems other than Android, `cd src/main/cpp` and run `cmake ./ && make`.
