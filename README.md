@@ -8,7 +8,7 @@ Comparing with standard lua c call, it can make up up to 75% in performance. Slo
 
 But there's still some change from the original lua ffi library:
  
-1. From lua 5.3, int64 result is return as an integer from c call except for uintptr type.
+1. from lua 5.3, int64 result is return as an integer from c call except for uintptr type.
 1. ffi.i64 and ffi.u64 are no longer available since lua 5.3 .
 1. libgcc is not available on Android.
 1. cdata array can be iterate by ipairs or pairs and it's length can be retrieved by # operator now.
@@ -23,8 +23,8 @@ Some known issues:
 1. unsupported bit operation.
 1. struct/union/complex values passed by value in variadic procedure is unsupported.
 1. gcc extension vector type is unsupported.
-1. __atrribte__((aligned)) use gcc definition rather than clang
-1. For msvc, the c runtime for the project and the lua.dll must be the same or
+1. `__atrribte__((aligned))` use gcc definition rather than clang
+1. for msvc, the c runtime for the project and the lua.dll must be the same or
    cast for lua FILE object to c FILE object wouldn't work because msvcrt.dll doesn't compat with ucrtbase.dll
 
 
