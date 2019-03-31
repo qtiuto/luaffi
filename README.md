@@ -8,10 +8,10 @@ Comparing with standard lua c call, it can make up up to 75% in performance. Slo
 
 But there's still some change from the original lua ffi library:
  
-1. from lua 5.3, int64 result is return as an integer from c call except for uintptr type.
+1. from lua 5.3, int64 result is returned as an integer from c call except for intptr_t type.
 1. ffi.i64 and ffi.u64 are no longer available since lua 5.3 .
 1. libgcc is not available on Android.
-1. cdata array can be iterate by ipairs or pairs and it's length can be retrieved by # operator now.
+1. cdata array can be iterated by ipairs or pairs and its length can be retrieved by # operator now.
 1. ffi.metatype should be called once you change any metafield of the metatable for the ctype.Note that the metatable won't be kept by the type.I use another table to store metafields.
 1. more detailed error message.
 1. several bugs are fixed.
