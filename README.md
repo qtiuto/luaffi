@@ -24,7 +24,7 @@ Some known issues:
 1. struct/union/complex values passed by value in variadic procedure is unsupported.
 1. gcc extension vector type is unsupported.
 1. `__atrribte__((aligned))` use gcc definition rather than the clang one.
-1. for msvc, the c runtime for the project and the lua.dll must be the same or
+1. for msvc, the c runtime for the project and the lua.dll must be the same, or else
    cast for lua FILE object to c FILE object won't work because msvcrt.dll doesn't compat with ucrtbase.dll
 
 
