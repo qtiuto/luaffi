@@ -2937,10 +2937,20 @@ static int ffi_abi(lua_State* L)
     return 1;
 }
 #ifdef FAKE_ANDROID_DL
+
+#include "fake_dlfcn.h"
+#include "sys/system_properties.h"
+static int getSDK() {
+    static int sdk=0;
+    if(sdk!=0)
+        return sdk;
+    char s[6];
+    __system_property_get("ro.build.version.sdk",s);
+    sdk=atoi(s);
+    return sdk;
+}
 static void* android_fake_load_library(lua_State* L,const char* libname)
 {
-    extern int getSDK();
-    extern void *fake_dlopen(const char *libpath, int flags);
     if(getSDK()<24) return NULL;
     if(libname[0]=='/'){
         return fake_dlopen(libname,RTLD_LAZY);

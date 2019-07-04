@@ -23,7 +23,7 @@ ifeq (,$(wildcard $(LOCAL_PATH)/call_x64win.h))
 endif
 
 include $(CLEAR_VARS)
-LOCAL_SRC_FILES  := ffi.c call.c parser.c ctype.c
+LOCAL_SRC_FILES  := ffi.c call.c parser.c ctype.c fake_dlfcn.c
 LOCAL_C_INCLUDES := $(LOCAL_PATH) $(LOCAL_PATH)/../../../../lib/src/main/externalLib/lua
 LOCAL_LDLIBS := -ldl -llog
 LOCAL_LDFLAGS := $(LOCAL_PATH)/../lua/$(TARGET_ARCH_ABI)/libluadroid.so
